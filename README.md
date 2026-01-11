@@ -40,7 +40,7 @@ A command-line AI tool for autocommits.
 
    > **💡 Why pipx?** pipx installs CLI tools in isolated environments, preventing dependency conflicts while making them globally available.
 
-   **All AI providers are included by default!** ✅ Gemini, OpenAI, Groq, Anthropic, Ollama, and Custom API support.
+   **All AI providers are included by default!** ✅ Gemini, OpenAI, Groq, OpenRouter, Anthropic, Ollama, and Custom API support.
 
 2. **Set Up Configuration (Required: API Key)**  
    DevCommit requires an API key for your chosen AI provider. You can configure it using **any** of these methods:
@@ -73,7 +73,7 @@ A command-line AI tool for autocommits.
    MAX_NO = 1
    COMMIT_TYPE = conventional
    # Model selection (provider-specific key takes priority, MODEL_NAME is the fallback)
-   # GEMINI_MODEL / OPENAI_MODEL / GROQ_MODEL / ANTHROPIC_MODEL / OLLAMA_MODEL / CUSTOM_MODEL
+   # GEMINI_MODEL / OPENAI_MODEL / GROQ_MODEL / OPENROUTER_MODEL / ANTHROPIC_MODEL / OLLAMA_MODEL / CUSTOM_MODEL
    MODEL_NAME = gemini-2.5-flash
    COMMIT_MODE = auto
    EOF
@@ -127,6 +127,7 @@ You can set your preferred commit mode in the `.dcommit` configuration file usin
 - **`COMMIT_MODE = auto`** (default): Automatically prompts when multiple directories are detected
 - **`COMMIT_MODE = directory`**: Always use directory-based commits for multiple directories
 - **`COMMIT_MODE = global`**: Always create one commit for all changes
+- **`COMMIT_MODE = related`**: Group related changes together using AI analysis
 
 **Priority order:** CLI flag (`--directory`) → Config file (`COMMIT_MODE`) → Interactive prompt (if `auto`)
 
@@ -134,8 +135,9 @@ You can set your preferred commit mode in the `.dcommit` configuration file usin
 
 - **Interactive mode (auto):** When you have changes in multiple directories, DevCommit will automatically ask if you want to:
 
-  - Create one commit for all changes (global commit)
-  - Create separate commits per directory
+  - 🌐 Create one commit for all changes (global commit)
+  - 📁 Create separate commits per directory
+  - 🔗 Group related changes together (AI-powered)
 
 - **Force directory-based commits:**
   ```bash
@@ -149,6 +151,132 @@ When using directory-based commits, you can:
 1. Select which directories to commit (use Space to select, Enter to confirm)
 2. For each selected directory, review and choose a commit message
 3. Each directory gets its own commit with AI-generated messages based on its changes
+
+### Related Changes Grouping (AI-Powered)
+
+DevCommit can intelligently group related changes together based on **semantic relationships**, regardless of directory structure. This creates clean, logical commits that reflect what you actually changed.
+
+#### Grouping Principles
+
+The AI analyzes your changes using these priorities:
+
+1. **Feature/Intent-Based Grouping** (Highest Priority)
+   - All files implementing the SAME feature go together
+   - Example: Adding "User Comments" groups schema + endpoints + migrations + tests + services = **1 commit**
+
+2. **Entity/Domain-Based Grouping**
+   - Changes to the same domain entity belong together
+   - Looks for: shared entity names, table names, class names, import relationships
+
+3. **Bug Fix Grouping**
+   - A bug fix touching multiple areas stays as one logical fix
+   - Grouped by the bug being fixed, not file location
+
+4. **Refactoring Grouping**
+   - Renaming across 10 files = 1 commit, not 10 separate commits
+
+5. **Configuration Grouping**
+   - Config changes + code that uses that config = 1 commit
+
+#### How It Works
+
+1. DevCommit analyzes all staged file diffs
+2. AI examines the **content** of changes to find relationships:
+   - Shared entity/class names
+   - Import relationships between files
+   - Shared database tables
+   - Shared API endpoints
+   - Test-to-implementation relationships
+   - Naming conventions (user_model.py, user_controller.py → same entity)
+3. Files are grouped by **what they accomplish together**, not by directory
+4. Each group gets a commit with type badge: ✨ feature, 🐛 bugfix, ♻️ refactor, etc.
+
+#### Performance Considerations
+
+**Token Usage:** The "Group related changes together" feature analyzes all file diffs in a single AI call to understand relationships, which consumes more tokens than other commit modes. This is because:
+
+- All file diffs are sent to the AI simultaneously for semantic analysis
+- The AI generates commit messages for each group in the same call
+- Larger changesets (many files or large diffs) will use proportionally more tokens
+
+**When to Use:**
+- ✅ Best for: Medium-sized changesets (5-50 files) where logical grouping matters
+- ✅ Ideal when: You want semantically coherent commits regardless of directory structure
+- ⚠️ Consider alternatives for: Very large changesets (100+ files) or when token costs are a concern
+
+For large changesets, you might prefer:
+- **Directory-based commits** (`COMMIT_MODE=directory`) - processes each directory separately
+- **Global commit** (`COMMIT_MODE=global`) - one commit for everything
+
+#### Configuration
+
+Set `COMMIT_MODE = related` in your `.dcommit` file to always use related grouping:
+
+```bash
+cat > ~/.dcommit << 'EOF'
+GEMINI_API_KEY = your-api-key-here
+COMMIT_MODE = related
+EOF
+```
+
+Or select it interactively when prompted (with `COMMIT_MODE = auto`):
+
+```
+❯ Commit strategy (Use arrow keys)
+    🌐 One commit for all changes
+    📁 Separate commits per directory
+  ❯ 🔗 Group related changes together
+```
+
+#### Real-World Example
+
+You're working on multiple things and have changes across many files and directories:
+
+**Staged files:**
+```
+schema/appointment.py          # New appointment model
+src/api/appointments.py        # Appointment endpoints  
+src/services/booking_service.py # Booking logic
+migrations/003_appointments.sql # Database migration
+tests/test_appointments.py     # Feature tests
+src/auth/session.py            # Fixed session timeout (unrelated)
+src/middleware/auth.py         # Fixed session timeout (unrelated)
+config/redis.py                # Updated cache settings (unrelated)
+```
+
+**DevCommit analyzes the code and groups by semantic relationship:**
+
+```
+╭────────────────────────────────────────────────────────────╮
+│  ✅ Found 3 logical group(s)                               │
+╰────────────────────────────────────────────────────────────╯
+
+  ✨ add-appointment-booking [feature] (5 files)
+     Add appointment booking system with scheduling functionality
+       └─ schema/appointment.py
+       └─ src/api/appointments.py
+       └─ src/services/booking_service.py
+       └─ migrations/003_appointments.sql
+       └─ tests/test_appointments.py
+
+  🐛 fix-session-timeout [bugfix] (2 files)
+     Fix user session expiring prematurely on idle
+       └─ src/auth/session.py
+       └─ src/middleware/auth.py
+
+  ⚙️ update-redis-config [config] (1 file)
+     Update Redis cache TTL and connection pool settings
+       └─ config/redis.py
+```
+
+**Result:** 3 focused, logical commits instead of 8 directory-based commits!
+
+The AI identifies relationships by analyzing:
+- Shared class/function names in the diffs
+- Import statements connecting files
+- Database table names
+- API endpoint patterns
+- File naming conventions
 
 ### Commit Specific Files or Folders
 
@@ -294,6 +422,7 @@ DevCommit now supports **multiple AI providers**! Choose from:
 | ---------------- | ------------------ | ----------- | --------- | ------------------------------------------------- |
 | 🆓 **Gemini**    | 15 req/min, 1M/day | Fast        | Good      | [Get Key](https://aistudio.google.com/app/apikey) |
 | ⚡ **Groq**      | Very generous      | **Fastest** | Good      | [Get Key](https://console.groq.com/keys)          |
+| 🌐 **OpenRouter**| Free models available | Fast      | Good      | [Get Key](https://openrouter.ai/keys)            |
 | 🤖 **OpenAI**    | $5 trial           | Medium      | **Best**  | [Get Key](https://platform.openai.com/api-keys)   |
 | 🧠 **Anthropic** | Limited trial      | Medium      | Excellent | [Get Key](https://console.anthropic.com/)         |
 | 🏠 **Ollama**    | **Unlimited**      | Medium      | Good      | [Install](https://ollama.ai/)                     |
@@ -308,6 +437,44 @@ export AI_PROVIDER=groq
 export GROQ_API_KEY='your-groq-api-key'
 devcommit
 ```
+
+**Using OpenRouter.ai (Access to multiple free models):**
+
+```bash
+export AI_PROVIDER=openrouter
+export OPENROUTER_API_KEY='your-openrouter-api-key'
+# Optional: specify model (default: mistralai/devstral-2512:free)
+export OPENROUTER_MODEL='mistralai/devstral-2512:free'
+devcommit
+```
+
+**Popular free models on OpenRouter (add `:free` suffix):**
+
+**Coding & Development:**
+- `mistralai/devstral-2512:free` - Mistral's state-of-the-art coding model (123B params)
+- `kwaipilot/kat-coder-pro:free` - Advanced agentic coding model (73.4% SWE-Bench solve rate)
+- `qwen/qwen3-coder:free` - Qwen's MoE code generation model (480B params, 35B active)
+- `deepseek/deepseek-r1-0528:free` - DeepSeek R1 reasoning model (671B params, open-source)
+
+**Reasoning & General Purpose:**
+- `xiaomi/mimo-v2-flash:free` - Mixture-of-Experts model (309B params, top open-source on SWE-bench)
+- `tngtech/deepseek-r1t2-chimera:free` - DeepSeek R1T2 reasoning model (671B params)
+- `tngtech/deepseek-r1t-chimera:free` - DeepSeek R1T reasoning model
+- `tngtech/tng-r1t-chimera:free` - Creative storytelling and character interaction model
+
+**Lightweight & Fast:**
+- `z-ai/glm-4.5-air:free` - GLM 4.5 Air lightweight variant (MoE architecture)
+- `nvidia/nemotron-3-nano-30b-a3b:free` - NVIDIA's efficient small model (30B params, 3B active)
+
+**Important Notes:**
+- **Logging Requirements:** Some free models may log your prompts and responses for model improvement purposes. This means:
+  - Your code diffs and commit messages may be stored by the provider
+  - **Do NOT use free models with logging for sensitive/confidential code**
+  - Check each model's documentation on OpenRouter for specific logging policies
+- **Rate Limits:** Free models typically have rate limits (requests per minute/day)
+- **Trial Use:** Some free models are marked as "trial use only" - not for production
+
+Check [OpenRouter's models page](https://openrouter.ai/models?q=%3Afree) for the latest list, restrictions, and logging policies for each model.
 
 **Using Ollama (Local, no API key needed):**
 
@@ -336,7 +503,7 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 
 | Variable      | Description             | Default  | Options                                                     |
 | ------------- | ----------------------- | -------- | ----------------------------------------------------------- |
-| `AI_PROVIDER` | Which AI service to use | `gemini` | `gemini`, `openai`, `groq`, `anthropic`, `ollama`, `custom` |
+| `AI_PROVIDER` | Which AI service to use | `gemini` | `gemini`, `openai`, `groq`, `openrouter`, `anthropic`, `ollama`, `custom` |
 
 ### Provider-Specific Settings
 
@@ -357,6 +524,12 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 |----------|-------------|---------|
 | `GROQ_API_KEY` | Groq API key ([Get it here](https://console.groq.com/)) | - |
 | `GROQ_MODEL` | Model name | `llama-3.3-70b-versatile` |
+
+**OpenRouter:**
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `OPENROUTER_API_KEY` | OpenRouter API key ([Get it here](https://openrouter.ai/keys)) | - |
+| `OPENROUTER_MODEL` | Model name (add `:free` suffix for free models) | `mistralai/devstral-2512:free` |
 
 **Anthropic:**
 | Variable | Description | Default |
@@ -384,7 +557,7 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 | `LOCALE`        | Language for commit messages         | `en-US`                                                | Any locale code (e.g., `en`, `es`, `fr`) |
 | `MAX_NO`        | Number of commit message suggestions | `1`                                                    | Any positive integer                     |
 | `COMMIT_TYPE`   | Style of commit messages             | `general`                                              | `general`, `conventional`, etc.          |
-| `COMMIT_MODE`   | Default commit strategy              | `auto`                                                 | `auto`, `directory`, `global`            |
+| `COMMIT_MODE`   | Default commit strategy              | `auto`                                                 | `auto`, `directory`, `global`, `related` |
 | `EXCLUDE_FILES` | Files to exclude from diff           | `package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock` | Comma-separated file patterns            |
 | `MAX_TOKENS`    | Maximum tokens for AI response       | `8192`                                                 | Any positive integer                     |
 
