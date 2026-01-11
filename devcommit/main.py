@@ -1140,7 +1140,7 @@ def process_per_related_commits(console, staged, flags):
             # Fallback mode detected - AI parsing failed, so commit_messages are empty
             # Generate commit messages for all groups (one call per group, but done upfront)
             # This is still extra calls, but at least they're done before user interaction
-            from devcommit.app.gemini_ai import generateCommitMessage
+            # Note: generateCommitMessage is already imported at the top of the file
             
             console.print("[dim]⚠️  AI grouping response had no commit messages. Generating now...[/dim]")
             with console.status(
