@@ -278,6 +278,46 @@ The AI identifies relationships by analyzing:
 - API endpoint patterns
 - File naming conventions
 
+#### Group Selection Options
+
+After DevCommit analyzes and groups your changes, you'll see three options:
+
+1. **✅ Commit all groups** - Automatically processes all groups sequentially (no prompts between groups)
+2. **📋 Select specific groups** - Choose which groups to commit:
+   - No groups are pre-selected (you must explicitly select with Space)
+   - If you press Enter without selecting any, you'll be re-prompted with: "⚠️  You need to select at least one group to continue"
+   - After committing each selected group, you'll be asked if you want to continue to the next
+3. **🔄 Regenerate grouping** - Re-runs the AI analysis to create new groups (useful if the initial grouping isn't ideal)
+
+**Example workflow:**
+```
+✅ Found 5 logical group(s)
+
+? What would you like to do?
+  ✅ Commit all groups
+  📋 Select specific groups
+  🔄 Regenerate grouping
+
+[User selects "Select specific groups"]
+
+? Select groups to commit
+  (none selected - use Space to toggle)
+  
+[User presses Enter without selecting]
+⚠️  You need to select at least one group to continue
+Use Space to select groups, then press Enter
+
+? Select groups to commit
+  [✓] ✨ add-user-feature [feature] (4 files)
+  [ ] 🐛 fix-bug [bugfix] (2 files)
+  [✓] 📝 update-docs [docs] (3 files)
+  
+✓ Selected 2 group(s) to commit
+
+[After committing first group]
+? Continue to next group (1 remaining)? (y/n)
+```
+
 ### Commit Specific Files or Folders
 
 DevCommit allows you to commit specific files or folders. This is useful when you want to commit only certain changes without affecting other staged files.

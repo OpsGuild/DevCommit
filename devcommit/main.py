@@ -1232,26 +1232,34 @@ def process_per_related_commits(console, staged, flags):
                 selected_groups = list(related_groups.keys())
                 commit_all_mode = True  # Track that we're in "commit all" mode
             else:  # select
-                # Let user select which groups to commit
-                group_choices = []
-                for group_name, group_data in related_groups.items():
-                    emoji = group_data.get('emoji', '📦')
-                    change_type = group_data.get('type', 'chore')
-                    file_count = len(group_data['files'])
-                    description = group_data.get('description', 'No description')
-                    display_name = f"{emoji} {group_name} [{change_type}] ({file_count} files) - {description[:50]}{'...' if len(description) > 50 else ''}"
-                    # Use 'enabled: True' to pre-select all items by default
-                    group_choices.append({"name": display_name, "value": group_name, "enabled": True})
-                
-                selected_groups = inquirer.checkbox(
-                    message="Select groups to commit",
-                    style=style,
-                    choices=group_choices,
-                    instruction="(↑↓ navigate, Space toggle, Enter confirm)",
-                    qmark="❯",
-                    validate=lambda result: len(result) > 0,
-                    invalid_message="Please select at least one group (use Space to toggle)"
-                ).execute()
+                # Let user select which groups to commit (none pre-selected)
+                selected_groups = []
+                while not selected_groups:
+                    group_choices = []
+                    for group_name, group_data in related_groups.items():
+                        emoji = group_data.get('emoji', '📦')
+                        change_type = group_data.get('type', 'chore')
+                        file_count = len(group_data['files'])
+                        description = group_data.get('description', 'No description')
+                        display_name = f"{emoji} {group_name} [{change_type}] ({file_count} files) - {description[:50]}{'...' if len(description) > 50 else ''}"
+                        # Don't pre-select - user must explicitly select groups
+                        group_choices.append({"name": display_name, "value": group_name, "enabled": False})
+                    
+                    try:
+                        selected_groups = inquirer.checkbox(
+                            message="Select groups to commit",
+                            style=style,
+                            choices=group_choices,
+                            instruction="(↑↓ navigate, Space toggle, Enter confirm)",
+                            qmark="❯"
+                        ).execute() or []
+                        
+                        if not selected_groups or len(selected_groups) == 0:
+                            console.print("\n[bold yellow]⚠️  You need to select at least one group to continue[/bold yellow]")
+                            console.print("[dim]Use Space to select groups, then press Enter[/dim]\n")
+                            continue
+                    except KeyboardInterrupt:
+                        raise
                 
                 # Clear any raw output and show clean summary
                 console.print("\033[2K", end="")  # Clear current line
