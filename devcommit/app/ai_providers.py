@@ -144,6 +144,31 @@ class GroqProvider(AIProvider):
         return response.choices[0].message.content.strip()
 
 
+class OpenRouterProvider(AIProvider):
+    """OpenRouter.ai provider (OpenAI-compatible, access to multiple models)"""
+    
+    def __init__(self, api_key: str, model: str = "mistralai/devstral-2512:free"):
+        if not openai:
+            raise ImportError("openai not installed. Run: pip install openai")
+        self.client = openai.OpenAI(
+            api_key=api_key,
+            base_url="https://openrouter.ai/api/v1"
+        )
+        self.model = model
+        
+    def generate_commit_message(self, diff: str, prompt: str, max_tokens: int) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": diff}
+            ],
+            max_tokens=max_tokens,
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip()
+
+
 class AnthropicProvider(AIProvider):
     """Anthropic Claude provider"""
     
@@ -258,6 +283,16 @@ def get_ai_provider(config) -> AIProvider:
         )
         return GroqProvider(api_key, model)
     
+    elif provider_name == "openrouter":
+        api_key = config("OPENROUTER_API_KEY", default=None)
+        if not api_key:
+            raise ValueError("OPENROUTER_API_KEY not set")
+        model = (
+            config("OPENROUTER_MODEL", default=None)
+            or config("MODEL_NAME", default="mistralai/devstral-2512:free")
+        )
+        return OpenRouterProvider(api_key, model)
+    
     elif provider_name == "anthropic":
         api_key = config("ANTHROPIC_API_KEY", default=None)
         if not api_key:
@@ -290,6 +325,6 @@ def get_ai_provider(config) -> AIProvider:
     else:
         raise ValueError(
             f"Unknown AI provider: {provider_name}. "
-            f"Supported: gemini, openai, groq, anthropic, ollama, custom"
+            f"Supported: gemini, openai, groq, openrouter, anthropic, ollama, custom"
         )
 

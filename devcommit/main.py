@@ -14,7 +14,9 @@ from devcommit.utils.git import (KnownError, assert_git_repo,
                                  get_detected_message, get_diff_for_files,
                                  get_files_from_paths, get_staged_diff,
                                  group_files_by_directory, has_commits_to_push,
-                                 push_to_remote, stage_files)
+                                 push_to_remote, stage_files,
+                                 generate_relation_grouping_prompt,
+                                 parse_relation_groups)
 from devcommit.utils.logger import Logger, config
 from devcommit.utils.parser import CommitFlag, parse_arguments
 
@@ -53,18 +55,30 @@ def main(flags: CommitFlag = None):
         provider = config("AI_PROVIDER", default="gemini").lower()
         model = ""
         
+        # Helper to get model with fallback: provider-specific > MODEL_NAME > default
+        def get_model(provider_key, fallback_default):
+            provider_model = config(provider_key, default=None)
+            if provider_model:
+                return provider_model
+            generic_model = config("MODEL_NAME", default=None)
+            if generic_model:
+                return generic_model
+            return fallback_default
+        
         if provider == "ollama":
             model = config("OLLAMA_MODEL", default="llama3")
         elif provider == "gemini":
-            model = config("GEMINI_MODEL", default=None) or config("MODEL_NAME", default="gemini-2.0-flash-exp")
+            model = get_model("GEMINI_MODEL", "gemini-2.0-flash-exp")
         elif provider == "openai":
-            model = config("OPENAI_MODEL", default=None) or config("MODEL_NAME", default="gpt-4o-mini")
+            model = get_model("OPENAI_MODEL", "gpt-4o-mini")
         elif provider == "groq":
-            model = config("GROQ_MODEL", default=None) or config("MODEL_NAME", default="llama-3.3-70b-versatile")
+            model = get_model("GROQ_MODEL", "llama-3.3-70b-versatile")
+        elif provider == "openrouter":
+            model = get_model("OPENROUTER_MODEL", "mistralai/devstral-2512:free")
         elif provider == "anthropic":
-            model = config("ANTHROPIC_MODEL", default=None) or config("MODEL_NAME", default="claude-3-haiku-20240307")
+            model = get_model("ANTHROPIC_MODEL", "claude-3-haiku-20240307")
         elif provider == "custom":
-            model = config("CUSTOM_MODEL", default=None) or config("MODEL_NAME", default="default")
+            model = get_model("CUSTOM_MODEL", "default")
         
         console.print(f"[dim]Provider:[/dim] [bold magenta]{provider}[/bold magenta] [dim]│[/dim] [dim]Model:[/dim] [bold magenta]{model}[/bold magenta]")
         console.print()
@@ -158,25 +172,32 @@ def main(flags: CommitFlag = None):
         
         # Determine commit strategy
         # Priority: CLI flag > config (file or env) > interactive prompt
-        use_per_directory = flags.get("directory", False)
+        # Strategy can be: "global", "directory", "related", or None (to prompt)
+        commit_strategy = None
         
         # Special handling when --files is used: check if we should use per-file commits
         is_files_mode = push_files_list and len(push_files_list) > 0
         
-        # If not explicitly set via CLI, check config (file or environment variable)
-        if not use_per_directory:
+        # Check CLI flag first (--directory forces directory mode)
+        if flags.get("directory", False):
+            commit_strategy = "directory"
+        
+        # If not set via CLI, check config (file or environment variable)
+        if commit_strategy is None:
             commit_mode = config("COMMIT_MODE", default="auto").lower()
             if commit_mode == "directory":
-                use_per_directory = True
+                commit_strategy = "directory"
             elif commit_mode == "global":
-                use_per_directory = False
-            # If "auto" or not set, fall through to interactive prompt
+                commit_strategy = "global"
+            elif commit_mode == "related":
+                commit_strategy = "related"
+            # If "auto" or not set, fall through to interactive prompt (commit_strategy stays None)
         
         # If still not set (auto mode), check if there are multiple directories and prompt
-        if not use_per_directory and config("COMMIT_MODE", default="auto").lower() == "auto":
+        if commit_strategy is None:
             if is_files_mode:
                 # When --files is used with auto mode, always prompt
-                # Group files to show directory structure, but prompt for per-file vs global
+                # Group files to show directory structure, but prompt for strategy selection
                 grouped = group_files_by_directory(staged["files"])
                 console.print()
                 console.print("╭" + "─" * 60 + "╮", style="bold yellow")
@@ -185,18 +206,24 @@ def main(flags: CommitFlag = None):
                 console.print()
                 console.print(f"  [dim]Found {len(staged['files'])} file(s) to commit[/dim]")
                 console.print()
-                # Prompt for per-file vs global commit
-                use_per_directory = prompt_commit_strategy(console, grouped, is_files_mode=True)
+                # Prompt for strategy selection
+                commit_strategy = prompt_commit_strategy(console, grouped, is_files_mode=True)
             else:
                 # Regular auto mode: check directories
                 grouped = group_files_by_directory(staged["files"])
                 if len(grouped) > 1:
-                    use_per_directory = prompt_commit_strategy(console, grouped, is_files_mode=False)
-            # If only one directory and not files mode, use global commit (single commit for all files)
+                    commit_strategy = prompt_commit_strategy(console, grouped, is_files_mode=False)
+                else:
+                    # Only one directory, default to global
+                    commit_strategy = "global"
         
         # Track if any commits were made
         commit_made = False
-        if use_per_directory:
+        
+        if commit_strategy == "related":
+            # Use AI to group related changes together
+            commit_made = process_per_related_commits(console, staged, flags)
+        elif commit_strategy == "directory":
             # When --files is used with directory mode
             if is_files_mode:
                 # Check if original paths were directories or individual files
@@ -221,7 +248,7 @@ def main(flags: CommitFlag = None):
             else:
                 commit_made = process_per_directory_commits(console, staged, flags)
         else:
-            # Pass staged dict so process_global_commit knows which files to commit
+            # Global mode (default): Pass staged dict so process_global_commit knows which files to commit
             # (important when --files is used)
             commit_made = process_global_commit(console, flags, staged=staged)
         
@@ -490,12 +517,17 @@ def push_changes(console):
 
 
 def prompt_commit_strategy(console, grouped, is_files_mode=False):
-    """Prompt user to choose between global or directory-based commits.
+    """Prompt user to choose between global, directory-based, or related-changes commits.
     
     Args:
         console: Rich console for output
         grouped: Dictionary of directories and their files
         is_files_mode: If True, directory mode means per-file commits (when --files is used)
+    
+    Returns:
+        - "global": One commit for all changes
+        - "directory": Separate commits per directory (or per-file in files mode)
+        - "related": Group related changes together using AI analysis
     """
     console.print()
     console.print("╭" + "─" * 60 + "╮", style="bold yellow")
@@ -518,14 +550,16 @@ def prompt_commit_strategy(console, grouped, is_files_mode=False):
     if is_files_mode:
         # When --files is used, directory mode means per-file commits
         choices = [
-            {"name": "  🌐 One commit for all files", "value": False},
-            {"name": "  📄 Separate commit for each file", "value": True},
+            {"name": "  🌐 One commit for all files", "value": "global"},
+            {"name": "  📄 Separate commit for each file", "value": "directory"},
+            {"name": "  🔗 Group related changes together", "value": "related"},
         ]
     else:
         # Normal mode: directory mode means per-directory commits
         choices = [
-            {"name": "  🌐 One commit for all changes", "value": False},
-            {"name": "  📁 Separate commits per directory", "value": True},
+            {"name": "  🌐 One commit for all changes", "value": "global"},
+            {"name": "  📁 Separate commits per directory", "value": "directory"},
+            {"name": "  🔗 Group related changes together", "value": "related"},
         ]
     
     strategy = inquirer.select(
@@ -608,7 +642,7 @@ def process_per_directory_commits(console, staged, flags):
         else:
             # Let user select which directories to commit
             directory_choices = [
-                {"name": f"{directory} ({len(files)} file(s))", "value": directory}
+                {"name": f"{directory} ({len(files)} file(s))", "value": directory, "enabled": True}
                 for directory, files in grouped.items()
             ]
             
@@ -616,10 +650,16 @@ def process_per_directory_commits(console, staged, flags):
                 message="Select directories to commit",
                 style=style,
                 choices=directory_choices,
-                default=list(grouped.keys()),
-                instruction="(Space to select, Enter to confirm)",
-                qmark="❯"
+                instruction="(↑↓ navigate, Space toggle, Enter confirm)",
+                qmark="❯",
+                validate=lambda result: len(result) > 0,
+                invalid_message="Please select at least one directory (use Space to toggle)"
             ).execute()
+            
+            # Clear any raw output and show clean summary
+            console.print("\033[2K", end="")  # Clear current line
+            console.print(f"[bold green]✓ Selected {len(selected_directories)} directory(ies) to commit[/bold green]")
+            console.print()
     else:
         selected_directories = list(grouped.keys())
     
@@ -768,7 +808,7 @@ def process_per_file_commits(console, staged, flags):
         else:
             # Let user select which files to commit
             file_choices = [
-                {"name": file, "value": file}
+                {"name": file, "value": file, "enabled": True}
                 for file in files_with_changes
             ]
             
@@ -776,10 +816,16 @@ def process_per_file_commits(console, staged, flags):
                 message="Select files to commit",
                 style=style,
                 choices=file_choices,
-                default=files_with_changes,
-                instruction="(Space to select, Enter to confirm)",
-                qmark="❯"
+                instruction="(↑↓ navigate, Space toggle, Enter confirm)",
+                qmark="❯",
+                validate=lambda result: len(result) > 0,
+                invalid_message="Please select at least one file (use Space to toggle)"
             ).execute()
+            
+            # Clear any raw output and show clean summary
+            console.print("\033[2K", end="")  # Clear current line
+            console.print(f"[bold green]✓ Selected {len(selected_files)} file(s) to commit[/bold green]")
+            console.print()
     else:
         selected_files = files_with_changes
     
@@ -999,6 +1045,361 @@ def process_per_directory_commits_from_paths(console, staged, flags, original_pa
                 break
             else:
                 console.print(f"\n[bold yellow]⊘ Skipped {path}[/bold yellow]")
+                break
+    
+    return commits_made
+
+
+def _analyze_and_group_files(console, files, file_diffs, flags):
+    """Helper function to analyze files and group them by relationship.
+    Returns the grouped files dictionary."""
+    from devcommit.app.ai_providers import get_ai_provider
+    
+    # Use AI to group related files
+    with console.status(
+        "[magenta]🤖 AI analyzing relationships between changes...[/magenta]",
+        spinner="dots",
+        spinner_style="magenta"
+    ):
+        grouping_prompt = generate_relation_grouping_prompt(list(file_diffs.keys()), file_diffs)
+        
+        # Suppress stderr during AI call
+        import sys
+        _stderr = sys.stderr
+        _devnull = open(os.devnull, 'w')
+        sys.stderr = _devnull
+        
+        try:
+            provider = get_ai_provider(config)
+            ai_response = provider.generate_commit_message(
+                grouping_prompt,
+                "You are an expert software architect. Analyze the code changes and group related files together based on their semantic relationship, shared features, entities, and change intent.",
+                8192
+            )
+        finally:
+            sys.stderr = _stderr
+            _devnull.close()
+        
+        # Parse AI response into groups
+        related_groups = parse_relation_groups(ai_response, list(file_diffs.keys()))
+    
+    return related_groups
+
+
+def process_per_related_commits(console, staged, flags):
+    """Process separate commits for groups of related files.
+    Uses AI to analyze changes and group files by semantic relationship,
+    feature intent, and code dependencies.
+    Returns True if at least one commit was made, False otherwise."""
+    
+    commits_made = False
+    files = staged["files"]
+    
+    console.print()
+    console.print("╭" + "─" * 60 + "╮", style="bold magenta")
+    console.print("│" + "  🔗 [bold white]Analyzing related changes...[/bold white]".ljust(71) + "│", style="bold magenta")
+    console.print("╰" + "─" * 60 + "╯", style="bold magenta")
+    console.print()
+    console.print("[dim]Grouping files by feature, entity, and semantic relationship...[/dim]")
+    console.print()
+    
+    # Get diffs for all files
+    file_diffs = {}
+    with console.status(
+        "[magenta]🤖 Gathering file diffs...[/magenta]",
+        spinner="dots",
+        spinner_style="magenta"
+    ):
+        for file in files:
+            diff = get_diff_for_files([file], flags["excludeFiles"])
+            if diff:
+                file_diffs[file] = diff
+    
+    if not file_diffs:
+        console.print("\n[bold yellow]⚠️  No files with changes to commit[/bold yellow]\n")
+        return False
+    
+    # Group files (with option to regenerate)
+    commit_all_mode = True  # Default to auto-commit mode
+    while True:
+        related_groups = _analyze_and_group_files(console, files, file_diffs, flags)
+        
+        if not related_groups:
+            console.print("\n[bold yellow]⚠️  Could not determine related groups, falling back to directory grouping[/bold yellow]\n")
+            return process_per_directory_commits(console, staged, flags)
+        
+        # Check if groups have pre-generated commit messages
+        # If all groups have empty commit_messages, parsing likely failed and we're in fallback mode
+        # In that case, generate commit messages for all groups in one batch call
+        all_groups_empty = all(
+            not group_data.get('commit_messages') or len(group_data.get('commit_messages', [])) == 0
+            for group_data in related_groups.values()
+        )
+        
+        if all_groups_empty and len(related_groups) > 0:
+            # Fallback mode detected - AI parsing failed, so commit_messages are empty
+            # Generate commit messages for all groups (one call per group, but done upfront)
+            # This is still extra calls, but at least they're done before user interaction
+            from devcommit.app.gemini_ai import generateCommitMessage
+            
+            console.print("[dim]⚠️  AI grouping response had no commit messages. Generating now...[/dim]")
+            with console.status(
+                "[magenta]🤖 Generating commit messages for all groups...[/magenta]",
+                spinner="dots",
+                spinner_style="magenta"
+            ):
+                import sys
+                _stderr = sys.stderr
+                _devnull = open(os.devnull, 'w')
+                sys.stderr = _devnull
+                
+                try:
+                    # Generate commit messages for each group
+                    for group_name, group_data in related_groups.items():
+                        group_files = group_data['files']
+                        diff = get_diff_for_files(group_files, flags["excludeFiles"])
+                        if diff:
+                            commit_msgs = generateCommitMessage(diff)
+                            if isinstance(commit_msgs, str):
+                                commit_msgs = commit_msgs.split("|")
+                            group_data['commit_messages'] = [msg.strip() for msg in commit_msgs if msg and msg.strip()]
+                finally:
+                    sys.stderr = _stderr
+                    _devnull.close()
+    
+        # Display grouped results with type information
+        console.print()
+        console.print("╭" + "─" * 60 + "╮", style="bold green")
+        console.print("│" + f"  ✅ [bold white]Found {len(related_groups)} logical group(s)[/bold white]".ljust(71) + "│", style="bold green")
+        console.print("╰" + "─" * 60 + "╯", style="bold green")
+        console.print()
+        
+        for group_name, group_data in related_groups.items():
+            emoji = group_data.get('emoji', '📦')
+            change_type = group_data.get('type', 'chore')
+            file_count = len(group_data['files'])
+            description = group_data.get('description', '')
+            
+            # Show group header with type badge
+            type_colors = {
+                "feature": "green",
+                "bugfix": "red",
+                "refactor": "yellow",
+                "config": "blue",
+                "docs": "cyan",
+                "test": "magenta",
+                "chore": "white"
+            }
+            type_color = type_colors.get(change_type, "white")
+            
+            console.print(f"  {emoji} [bold white]{group_name}[/bold white] [bold {type_color}][{change_type}][/bold {type_color}] [dim]({file_count} file(s))[/dim]")
+            if description:
+                console.print(f"     [dim italic]{description}[/dim italic]")
+            
+            # Show files in this group (indented)
+            for file in group_data['files']:
+                console.print(f"       [dim]└─[/dim] [cyan]{file}[/cyan]")
+            console.print()
+        
+        # Ask if user wants to commit all groups, select specific ones, or regenerate grouping
+        style = get_style({
+            "question": "#00d7ff bold",
+            "questionmark": "#00d7ff bold",
+            "pointer": "#00d7ff bold",
+            "instruction": "#7f7f7f",
+            "answer": "#00d7ff bold",
+            "checkbox": "#00d7ff bold"
+        }, style_override=False)
+        
+        if len(related_groups) > 1:
+            action_choice = inquirer.select(
+                message="What would you like to do?",
+                style=style,
+                choices=[
+                    {"name": "  ✅ Commit all groups", "value": "all"},
+                    {"name": "  📋 Select specific groups", "value": "select"},
+                    {"name": "  🔄 Regenerate grouping", "value": "regenerate"}
+                ],
+                default="all",
+                instruction="(Use arrow keys)",
+                qmark="❯"
+            ).execute()
+            
+            if action_choice == "regenerate":
+                console.print("\n[bold cyan]🔄 Regenerating grouping...[/bold cyan]\n")
+                continue  # Loop back to regenerate
+            elif action_choice == "all":
+                selected_groups = list(related_groups.keys())
+                commit_all_mode = True  # Track that we're in "commit all" mode
+            else:  # select
+                # Let user select which groups to commit
+                group_choices = []
+                for group_name, group_data in related_groups.items():
+                    emoji = group_data.get('emoji', '📦')
+                    change_type = group_data.get('type', 'chore')
+                    file_count = len(group_data['files'])
+                    description = group_data.get('description', 'No description')
+                    display_name = f"{emoji} {group_name} [{change_type}] ({file_count} files) - {description[:50]}{'...' if len(description) > 50 else ''}"
+                    # Use 'enabled: True' to pre-select all items by default
+                    group_choices.append({"name": display_name, "value": group_name, "enabled": True})
+                
+                selected_groups = inquirer.checkbox(
+                    message="Select groups to commit",
+                    style=style,
+                    choices=group_choices,
+                    instruction="(↑↓ navigate, Space toggle, Enter confirm)",
+                    qmark="❯",
+                    validate=lambda result: len(result) > 0,
+                    invalid_message="Please select at least one group (use Space to toggle)"
+                ).execute()
+                
+                # Clear any raw output and show clean summary
+                console.print("\033[2K", end="")  # Clear current line
+                console.print(f"[bold green]✓ Selected {len(selected_groups)} group(s) to commit[/bold green]")
+                console.print()
+                commit_all_mode = False  # Track that we're in "select specific" mode
+        else:
+            # Only one group - ask if they want to commit it or regenerate
+            action_choice = inquirer.select(
+                message="What would you like to do?",
+                style=style,
+                choices=[
+                    {"name": "  ✅ Commit this group", "value": "commit"},
+                    {"name": "  🔄 Regenerate grouping", "value": "regenerate"}
+                ],
+                default="commit",
+                instruction="(Use arrow keys)",
+                qmark="❯"
+            ).execute()
+            
+            if action_choice == "regenerate":
+                console.print("\n[bold cyan]🔄 Regenerating grouping...[/bold cyan]\n")
+                continue  # Loop back to regenerate
+            else:
+                selected_groups = list(related_groups.keys())
+                commit_all_mode = True  # Single group = auto-commit mode
+        
+        if not selected_groups:
+            console.print("\n[bold yellow]⚠️  No groups selected[/bold yellow]\n")
+            return False
+        
+        # Break out of regenerate loop if we have selections
+        break
+    
+    # Process each selected group
+    for idx, group_name in enumerate(selected_groups, 1):
+        group_data = related_groups[group_name]
+        group_files = group_data['files']
+        description = group_data.get('description', '')
+        emoji = group_data.get('emoji', '📦')
+        change_type = group_data.get('type', 'chore')
+        pre_generated_messages = group_data.get('commit_messages', [])
+        
+        console.print()
+        console.print("┌" + "─" * 60 + "┐", style="bold cyan")
+        console.print("│" + f"  {emoji} [{idx}/{len(selected_groups)}] [bold white]{group_name}[/bold white] [dim][{change_type}][/dim]".ljust(78) + "│", style="bold cyan")
+        console.print("└" + "─" * 60 + "┘", style="bold cyan")
+        
+        if description:
+            console.print(f"[dim italic]{description}[/dim italic]")
+        console.print()
+        
+        for file in group_files:
+            console.print(f"  [cyan]▸[/cyan] [white]{file}[/white]")
+        
+        # Verify diff exists for this group
+        diff = get_diff_for_files(group_files, flags["excludeFiles"])
+        if not diff:
+            console.print(f"\n[bold yellow]⚠️  No diff for {group_name}, skipping[/bold yellow]\n")
+            continue
+        
+        # Use pre-generated commit messages from grouping (NO additional AI calls!)
+        if pre_generated_messages:
+            # Filter out empty messages and ensure we have at least one
+            commit_message = [msg.strip() for msg in pre_generated_messages if msg and msg.strip()]
+            if not commit_message:
+                console.print(f"\n[bold yellow]⚠️  No valid commit messages for {group_name}, skipping[/bold yellow]\n")
+                continue
+        else:
+            # Fallback: generate if not provided (shouldn't happen normally)
+            with console.status(
+                f"[magenta]🤖 Generating commit message for {group_name}...[/magenta]",
+                spinner="dots",
+                spinner_style="magenta"
+            ):
+                import sys
+                _stderr = sys.stderr
+                _devnull = open(os.devnull, 'w')
+                sys.stderr = _devnull
+                try:
+                    commit_message = generateCommitMessage(diff)
+                finally:
+                    sys.stderr = _stderr
+                    _devnull.close()
+                
+                if isinstance(commit_message, str):
+                    commit_message = commit_message.split("|")
+                
+                if not commit_message:
+                    console.print(f"\n[bold yellow]⚠️  No commit message generated for {group_name}, skipping[/bold yellow]\n")
+                    continue
+        
+        # Prompt for commit message selection with regenerate option
+        while True:
+            def regenerate():
+                diff = get_diff_for_files(group_files, flags["excludeFiles"])
+                if not diff:
+                    return []
+                import sys
+                _stderr = sys.stderr
+                _devnull = open(os.devnull, 'w')
+                sys.stderr = _devnull
+                try:
+                    msg = generateCommitMessage(diff)
+                    if isinstance(msg, str):
+                        msg = msg.split("|")
+                    return msg
+                finally:
+                    sys.stderr = _stderr
+                    _devnull.close()
+            
+            selected_commit = prompt_commit_message(console, commit_message, regenerate_callback=regenerate)
+            
+            if selected_commit == "regenerate":
+                # Regenerate commit messages (this is the only time we make an extra AI call)
+                with console.status(
+                    f"[magenta]🤖 Regenerating commit messages for {group_name}...[/magenta]",
+                    spinner="dots",
+                    spinner_style="magenta"
+                ):
+                    commit_message = regenerate()
+                    if not commit_message:
+                        console.print(f"\n[bold yellow]⚠️  No commit message generated for {group_name}, skipping[/bold yellow]\n")
+                        break
+                continue
+            elif selected_commit:
+                # Commit only the files in this group
+                subprocess.run(["git", "commit", "-m", selected_commit, *flags["rawArgv"], "--"] + group_files)
+                console.print(f"\n[bold green]✅ Committed {group_name}[/bold green]")
+                commits_made = True
+                break
+            else:
+                console.print(f"\n[bold yellow]⊘ Skipped {group_name}[/bold yellow]")
+                break
+        
+        # If in "select specific groups" mode and not the last group, ask if user wants to continue
+        if not commit_all_mode and idx < len(selected_groups):
+            console.print()
+            continue_choice = inquirer.confirm(
+                message=f"Continue to next group ({len(selected_groups) - idx} remaining)?",
+                style=style,
+                default=True,
+                instruction="(y/n)",
+                qmark="❯"
+            ).execute()
+            
+            if not continue_choice:
+                console.print("\n[bold yellow]⚠️  Stopped committing remaining groups[/bold yellow]\n")
                 break
     
     return commits_made
