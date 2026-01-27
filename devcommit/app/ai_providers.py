@@ -147,7 +147,7 @@ class GroqProvider(AIProvider):
 class OpenRouterProvider(AIProvider):
     """OpenRouter.ai provider (OpenAI-compatible, access to multiple models)"""
     
-    def __init__(self, api_key: str, model: str = "mistralai/devstral-2512:free"):
+    def __init__(self, api_key: str, model: str = "meta-llama/llama-3.3-70b-instruct:free"):
         if not openai:
             raise ImportError("openai not installed. Run: pip install openai")
         self.client = openai.OpenAI(
@@ -164,7 +164,10 @@ class OpenRouterProvider(AIProvider):
                 {"role": "user", "content": diff}
             ],
             max_tokens=max_tokens,
-            temperature=0.7
+            temperature=0.7,
+            extra_body={
+                "transforms": ["middle-out"]
+            }
         )
         return response.choices[0].message.content.strip()
 
@@ -289,7 +292,7 @@ def get_ai_provider(config) -> AIProvider:
             raise ValueError("OPENROUTER_API_KEY not set")
         model = (
             config("OPENROUTER_MODEL", default=None)
-            or config("MODEL_NAME", default="mistralai/devstral-2512:free")
+            or config("MODEL_NAME", default="meta-llama/llama-3.3-70b-instruct:free")
         )
         return OpenRouterProvider(api_key, model)
     

@@ -483,28 +483,19 @@ devcommit
 ```bash
 export AI_PROVIDER=openrouter
 export OPENROUTER_API_KEY='your-openrouter-api-key'
-# Optional: specify model (default: mistralai/devstral-2512:free)
-export OPENROUTER_MODEL='mistralai/devstral-2512:free'
+# Optional: specify model (default: meta-llama/llama-3.3-70b-instruct:free)
+export OPENROUTER_MODEL='meta-llama/llama-3.3-70b-instruct:free'
 devcommit
 ```
 
 **Popular free models on OpenRouter (add `:free` suffix):**
 
-**Coding & Development:**
-- `mistralai/devstral-2512:free` - Mistral's state-of-the-art coding model (123B params)
-- `kwaipilot/kat-coder-pro:free` - Advanced agentic coding model (73.4% SWE-Bench solve rate)
-- `qwen/qwen3-coder:free` - Qwen's MoE code generation model (480B params, 35B active)
-- `deepseek/deepseek-r1-0528:free` - DeepSeek R1 reasoning model (671B params, open-source)
-
-**Reasoning & General Purpose:**
-- `xiaomi/mimo-v2-flash:free` - Mixture-of-Experts model (309B params, top open-source on SWE-bench)
-- `tngtech/deepseek-r1t2-chimera:free` - DeepSeek R1T2 reasoning model (671B params)
-- `tngtech/deepseek-r1t-chimera:free` - DeepSeek R1T reasoning model
-- `tngtech/tng-r1t-chimera:free` - Creative storytelling and character interaction model
-
-**Lightweight & Fast:**
-- `z-ai/glm-4.5-air:free` - GLM 4.5 Air lightweight variant (MoE architecture)
-- `nvidia/nemotron-3-nano-30b-a3b:free` - NVIDIA's efficient small model (30B params, 3B active)
+**Recommended Models:**
+- `meta-llama/llama-3.3-70b-instruct:free` - Llama 3.3 70B Instruct (Powerful & General Purpose)
+- `google/gemma-3-27b-it:free` - Google Gemma 3 27B Instruct (Efficient & Capable)
+- `openai/gpt-oss-120b:free` - OpenAI GPT-OSS 120B (Large & Experimental)
+- `tngtech/deepseek-r1t-chimera:free` - DeepSeek R1T Chimera (Strong Reasoning)
+- `qwen/qwen3-next-80b-a3b-instruct:free` - Qwen3 Next 80B (Advanced Instruction Following)
 
 **Important Notes:**
 - **Logging Requirements:** Some free models may log your prompts and responses for model improvement purposes. This means:
@@ -569,7 +560,7 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `OPENROUTER_API_KEY` | OpenRouter API key ([Get it here](https://openrouter.ai/keys)) | - |
-| `OPENROUTER_MODEL` | Model name (add `:free` suffix for free models) | `mistralai/devstral-2512:free` |
+| `OPENROUTER_MODEL` | Model name (add `:free` suffix for free models) | `meta-llama/llama-3.3-70b-instruct:free` |
 
 **Anthropic:**
 | Variable | Description | Default |

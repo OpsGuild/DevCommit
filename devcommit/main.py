@@ -34,6 +34,36 @@ def has_commits() -> bool:
     return result.returncode == 0
 
 
+def sanitize_commit_messages(messages):
+    """Filter out error messages from commit message list.
+    
+    Args:
+        messages: String or list of commit messages
+        
+    Returns:
+        List of valid commit messages with error messages filtered out
+    """
+    # Convert string to list if needed
+    if isinstance(messages, str):
+        if not messages or messages.strip() == "":
+            return []
+        messages = messages.split("|")
+    
+    # Filter out error messages and empty strings
+    valid_messages = []
+    for msg in messages:
+        if not msg:
+            continue
+        msg = msg.strip()
+        # Skip if it's an error message
+        if msg.startswith("Error generating commit message:"):
+            continue
+        if msg and msg.strip():
+            valid_messages.append(msg)
+    
+    return valid_messages
+
+
 # Main function
 def main(flags: CommitFlag = None):
     if flags is None:
@@ -273,7 +303,8 @@ def main(flags: CommitFlag = None):
         return
     except KnownError as error:
         logger.error(str(error))
-        console.print(f"\n[bold red]❌ Error:[/bold red] [red]{error}[/red]\n")
+        # Don't print here - Rich status context already displays the error
+        pass
     except subprocess.CalledProcessError as error:
         logger.error(str(error))
         console.print(f"\n[bold red]❌ Git command failed:[/bold red] [red]{error}[/red]\n")
@@ -322,6 +353,9 @@ def analyze_changes(console, files=None):
     """
     import sys
     
+    # Store any exception to re-raise after status context exits
+    caught_exception = None
+    
     with console.status(
         "[magenta]🤖 AI analyzing changes...[/magenta]",
         spinner="dots",
@@ -350,17 +384,28 @@ def analyze_changes(console, files=None):
         
         try:
             commit_message = generateCommitMessage(diff)
+        except KnownError as e:
+            # Catch KnownError to prevent Rich status from printing it
+            caught_exception = e
+            commit_message = None
         finally:
             sys.stderr = _stderr
             _devnull.close()
         
-        if isinstance(commit_message, str):
-            commit_message = commit_message.split("|")
+        # If we caught an exception, we'll re-raise it after the status context exits
+        if caught_exception:
+            pass  # Will be raised below
+        else:
+            commit_message = sanitize_commit_messages(commit_message)
 
-        if not commit_message:
-            raise KnownError("No commit messages were generated. Try again.")
-
-        return commit_message
+            if not commit_message:
+                raise KnownError("No commit messages were generated. Try again.")
+    
+    # Re-raise the exception outside the status context to avoid duplicate printing
+    if caught_exception:
+        raise caught_exception
+    
+    return commit_message
 
 
 def prompt_commit_message(console, commit_message, regenerate_callback=None):
@@ -703,8 +748,7 @@ def process_per_directory_commits(console, staged, flags):
                 sys.stderr = _stderr
                 _devnull.close()
             
-            if isinstance(commit_message, str):
-                commit_message = commit_message.split("|")
+            commit_message = sanitize_commit_messages(commit_message)
             
             if not commit_message:
                 console.print(f"\n[bold yellow]⚠️  No commit message generated for {directory}, skipping[/bold yellow]\n")
@@ -722,9 +766,7 @@ def process_per_directory_commits(console, staged, flags):
                 sys.stderr = _devnull
                 try:
                     msg = generateCommitMessage(diff)
-                    if isinstance(msg, str):
-                        msg = msg.split("|")
-                    return msg
+                    return sanitize_commit_messages(msg)
                 finally:
                     sys.stderr = _stderr
                     _devnull.close()
@@ -865,8 +907,7 @@ def process_per_file_commits(console, staged, flags):
                 sys.stderr = _stderr
                 _devnull.close()
             
-            if isinstance(commit_message, str):
-                commit_message = commit_message.split("|")
+            commit_message = sanitize_commit_messages(commit_message)
             
             if not commit_message:
                 console.print(f"\n[bold yellow]⚠️  No commit message generated for {file}, skipping[/bold yellow]\n")
@@ -884,9 +925,7 @@ def process_per_file_commits(console, staged, flags):
                 sys.stderr = _devnull
                 try:
                     msg = generateCommitMessage(diff)
-                    if isinstance(msg, str):
-                        msg = msg.split("|")
-                    return msg
+                    return sanitize_commit_messages(msg)
                 finally:
                     sys.stderr = _stderr
                     _devnull.close()
@@ -997,8 +1036,7 @@ def process_per_directory_commits_from_paths(console, staged, flags, original_pa
                 sys.stderr = _stderr
                 _devnull.close()
             
-            if isinstance(commit_message, str):
-                commit_message = commit_message.split("|")
+            commit_message = sanitize_commit_messages(commit_message)
             
             if not commit_message:
                 console.print(f"\n[bold yellow]⚠️  No commit message generated for {path}, skipping[/bold yellow]\n")
@@ -1016,9 +1054,7 @@ def process_per_directory_commits_from_paths(console, staged, flags, original_pa
                 sys.stderr = _devnull
                 try:
                     msg = generateCommitMessage(diff)
-                    if isinstance(msg, str):
-                        msg = msg.split("|")
-                    return msg
+                    return sanitize_commit_messages(msg)
                 finally:
                     sys.stderr = _stderr
                     _devnull.close()
@@ -1160,9 +1196,7 @@ def process_per_related_commits(console, staged, flags):
                         diff = get_diff_for_files(group_files, flags["excludeFiles"])
                         if diff:
                             commit_msgs = generateCommitMessage(diff)
-                            if isinstance(commit_msgs, str):
-                                commit_msgs = commit_msgs.split("|")
-                            group_data['commit_messages'] = [msg.strip() for msg in commit_msgs if msg and msg.strip()]
+                            group_data['commit_messages'] = sanitize_commit_messages(commit_msgs)
                 finally:
                     sys.stderr = _stderr
                     _devnull.close()
@@ -1345,8 +1379,7 @@ def process_per_related_commits(console, staged, flags):
                     sys.stderr = _stderr
                     _devnull.close()
                 
-                if isinstance(commit_message, str):
-                    commit_message = commit_message.split("|")
+                commit_message = sanitize_commit_messages(commit_message)
                 
                 if not commit_message:
                     console.print(f"\n[bold yellow]⚠️  No commit message generated for {group_name}, skipping[/bold yellow]\n")
@@ -1364,9 +1397,7 @@ def process_per_related_commits(console, staged, flags):
                 sys.stderr = _devnull
                 try:
                     msg = generateCommitMessage(diff)
-                    if isinstance(msg, str):
-                        msg = msg.split("|")
-                    return msg
+                    return sanitize_commit_messages(msg)
                 finally:
                     sys.stderr = _stderr
                     _devnull.close()

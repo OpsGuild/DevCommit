@@ -16,6 +16,7 @@ warnings.filterwarnings('ignore', message='.*ALTS.*')
 warnings.filterwarnings('ignore', category=UserWarning)
 
 from devcommit.utils.logger import Logger, config
+from devcommit.utils.git import KnownError
 from .ai_providers import get_ai_provider
 from .prompt import generate_prompt
 
@@ -83,8 +84,16 @@ def generateCommitMessage(diff: str) -> str:
         return normalized_response
 
     except Exception as e:
-        logger.error(f"Error generating commit message: {e}")
-        return f"Error generating commit message: {str(e)}"
+        error_msg = str(e)
+        logger.error(f"Error generating commit message: {error_msg}")
+        
+        # Raise KnownError with user-friendly message that includes error details
+        # This prevents error messages from being shown as commit options
+        # while still informing the user what went wrong
+        raise KnownError(
+            f"Failed to generate commit message: {error_msg}. "
+            f"Please check your API configuration and try again."
+        )
     finally:
         # Restore stderr and close devnull
         sys.stderr = _stderr
