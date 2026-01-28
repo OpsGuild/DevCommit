@@ -1,6 +1,6 @@
 [project]
 name = "devcommit"
-version = "0.1.5.0"
+version = "0.1.5.1"
 description = "AI-powered git commit message generator"
 readme = "README.md"
 license = {file = "COPYING"}
