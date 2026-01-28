@@ -40,7 +40,7 @@ documentation = "https://github.com/Hordunlarmy/DevCommit#readme"
 
 [project.scripts]
 devcommit = "devcommit.main:main"
-create-dcommit = "scripts.create_dcommit:create_dcommit"
+create-dcommit = "devcommit.create_config:create_dcommit"
 
 [tool.poetry]
 name = "devcommit"

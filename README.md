@@ -98,6 +98,16 @@ A command-line AI tool for autocommits.
 
 ## Usage
 
+### Quick Setup
+
+Generate a configuration file with default settings:
+
+```bash
+create-dcommit
+```
+
+This creates a `.dcommit` file in your home directory (or virtual environment config folder) with all available options.
+
 After installation, you can start using DevCommit directly in your terminal:
 
 ```bash
