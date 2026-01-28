@@ -185,6 +185,10 @@ class OpenRouterProvider(AIProvider):
             max_tokens=max_tokens,
             temperature=0.7,
             extra_body={"transforms": ["middle-out"]},
+            extra_headers={
+                "HTTP-Referer": "https://github.com/hordunlarmy/DevCommit",
+                "X-Title": "DevCommit",
+            },
         )
         return response.choices[0].message.content.strip()
 
