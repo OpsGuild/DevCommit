@@ -11,6 +11,7 @@ class CommitFlag(TypedDict):
     directory: bool
     files: List[str]
     push: bool
+    changelog: bool
     rawArgv: List[str]
 
 
@@ -53,6 +54,10 @@ def parse_arguments() -> CommitFlag:
         help="Push commits to remote after committing"
     )
     parser.add_argument(
+        "--changelog", "-c", action="store_true",
+        help="Generate changelog file from changes"
+    )
+    parser.add_argument(
         "rawArgv", nargs="*", help="Additional arguments for git commit"
     )
 
@@ -66,5 +71,6 @@ def parse_arguments() -> CommitFlag:
         directory=args.directory,
         files=args.files or [],
         push=args.push,
+        changelog=args.changelog,
         rawArgv=args.rawArgv,
     )

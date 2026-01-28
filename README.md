@@ -6,6 +6,7 @@ A command-line AI tool for autocommits.
 
 - 🤖 **Multi-AI Provider Support** - Choose from Gemini, Groq, OpenAI, Claude, Ollama, or custom APIs
 - 🚀 Automatic commit generation using AI
+- 📝 **Changelog Generation** - Automatically generate markdown changelogs from your changes
 - 📁 Directory-based commits - create separate commits for each root directory
 - 🎯 Interactive mode to choose between global or directory-based commits
 - 📄 **Commit specific files or folders** - Stage and commit only selected files/directories
@@ -410,6 +411,47 @@ Selecting "Regenerate commit messages" will:
 
 This works for all commit modes (global, directory, and per-file commits).
 
+### Changelog Generation
+
+DevCommit can automatically generate markdown changelog files from your changes using AI.
+
+**Usage:**
+
+```bash
+# Generate changelog after committing
+devcommit --changelog
+
+# Generate changelog before staging (recommended)
+devcommit --stageAll --changelog
+
+# Short form
+devcommit -s -c
+
+# With specific files
+devcommit --stageAll --changelog --files src/
+```
+
+**How it works:**
+
+- **With `--stageAll`**: Changelog is generated from unstaged changes **before** staging
+- **Without `--stageAll`**: Changelog is generated from the last commit **after** committing
+- Changelogs are saved as markdown files with datetime-based names (e.g., `2026-01-28_00-55-30.md`)
+- Default directory: `changelogs/` (configurable via `CHANGELOG_DIR` in `.dcommit`)
+- Uses Keep a Changelog format with AI-generated content
+
+**Example workflow:**
+
+```bash
+# Make changes to your code
+# ...
+
+# Stage all changes and generate changelog before committing
+devcommit --stageAll --changelog
+
+# The changelog file is created in changelogs/ directory
+# Then changes are staged and committed
+```
+
 ### Additional Options
 
 - `--excludeFiles` or `-e`: Exclude specific files from the diff
@@ -419,6 +461,7 @@ This works for all commit modes (global, directory, and per-file commits).
 - `--directory` or `-d`: Force directory-based commits
 - `--files` or `-f`: Stage and commit specific files or folders (can specify multiple)
 - `--push` or `-p`: Push commits to remote after committing
+- `--changelog` or `-c`: Generate changelog file from changes
 
 ### Examples
 
@@ -452,6 +495,15 @@ devcommit -s -f src/core src/modules/account/ --directory
 
 # Stage and commit, then push
 devcommit -s -f src/core src/modules/account/ -p
+
+# Generate changelog before staging and committing
+devcommit --stageAll --changelog
+
+# Generate changelog after committing
+devcommit --changelog
+
+# Generate changelog with specific files
+devcommit -s -c -f src/
 ```
 
 ## AI Provider Support
@@ -591,6 +643,7 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 | `COMMIT_MODE`   | Default commit strategy              | `auto`                                                 | `auto`, `directory`, `global`, `related` |
 | `EXCLUDE_FILES` | Files to exclude from diff           | `package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock` | Comma-separated file patterns            |
 | `MAX_TOKENS`    | Maximum tokens for AI response       | `8192`                                                 | Any positive integer                     |
+| `CHANGELOG_DIR` | Directory for changelog files        | `changelogs`                                           | Any directory path                       |
 
 ### Configuration Priority
 

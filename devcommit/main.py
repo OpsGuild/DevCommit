@@ -10,6 +10,7 @@ from InquirerPy import get_style, inquirer
 from rich.console import Console
 
 from devcommit.app.gemini_ai import generateCommitMessage
+from devcommit.app.changelog import generate_changelog, save_changelog
 from devcommit.utils.git import (KnownError, assert_git_repo,
                                  get_detected_message, get_diff_for_files,
                                  get_files_from_paths, get_staged_diff,
@@ -128,6 +129,42 @@ def main(flags: CommitFlag = None):
                 raise e
             except Exception as e:
                 raise KnownError(f"Failed to get files from paths: {str(e)}")
+
+
+        # Generate changelog before staging if --changelog and --stageAll are both set
+        if flags["stageAll"] and flags["changelog"]:
+            console.print()
+            console.print("[bold cyan]📝 Generating changelog...[/bold cyan]")
+            
+            with console.status(
+                "[magenta]🤖 AI generating changelog from changes...[/magenta]",
+                spinner="dots",
+                spinner_style="magenta"
+            ):
+                # Get diff of unstaged changes
+                if push_files_list:
+                    # Get diff for specific files
+                    diff = get_diff_for_files(push_files_list, flags["excludeFiles"])
+                else:
+                    # Get diff for all changes
+                    import subprocess
+                    diff = subprocess.run(
+                        ["git", "diff"],
+                        stdout=subprocess.PIPE,
+                        text=True,
+                    ).stdout
+                
+                if diff:
+                    try:
+                        changelog_content = generate_changelog(diff)
+                        changelog_path = save_changelog(changelog_content)
+                        console.print(f"[bold green]✅ Changelog saved to:[/bold green] [cyan]{changelog_path}[/cyan]")
+                    except Exception as e:
+                        logger.error(f"Failed to generate changelog: {e}")
+                        console.print(f"[bold yellow]⚠️  Failed to generate changelog: {e}[/bold yellow]")
+                else:
+                    console.print("[bold yellow]⚠️  No changes to generate changelog from[/bold yellow]")
+            console.print()
 
         if flags["stageAll"]:
             if push_files_list:
@@ -287,6 +324,36 @@ def main(flags: CommitFlag = None):
             push_changes(console)
         elif flags.get("push", False) and not commit_made:
             console.print("\n[bold yellow]⚠️  No commits were made, skipping push[/bold yellow]\n")
+        
+        # Generate changelog after commit if --changelog is used without --stageAll
+        if flags.get("changelog", False) and not flags.get("stageAll", False) and commit_made:
+            console.print()
+            console.print("[bold cyan]📝 Generating changelog from committed changes...[/bold cyan]")
+            
+            with console.status(
+                "[magenta]🤖 AI generating changelog...[/magenta]",
+                spinner="dots",
+                spinner_style="magenta"
+            ):
+                # Get diff from last commit
+                import subprocess
+                diff = subprocess.run(
+                    ["git", "diff", "HEAD~1", "HEAD"],
+                    stdout=subprocess.PIPE,
+                    text=True,
+                ).stdout
+                
+                if diff:
+                    try:
+                        changelog_content = generate_changelog(diff)
+                        changelog_path = save_changelog(changelog_content)
+                        console.print(f"[bold green]✅ Changelog saved to:[/bold green] [cyan]{changelog_path}[/cyan]")
+                    except Exception as e:
+                        logger.error(f"Failed to generate changelog: {e}")
+                        console.print(f"[bold yellow]⚠️  Failed to generate changelog: {e}[/bold yellow]")
+                else:
+                    console.print("[bold yellow]⚠️  No changes to generate changelog from[/bold yellow]")
+            console.print()
         
         # Print stylish completion message only if commits were made
         if commit_made:

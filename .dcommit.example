@@ -78,5 +78,8 @@ COMMIT_MODE = auto
 # Comma-separated list of file patterns
 EXCLUDE_FILES = *.lock, dist/*, build/*, node_modules/*
 
+# Directory for changelog files (default: changelogs)
+# Used when --changelog flag is passed
+CHANGELOG_DIR = changelogs
 
 
