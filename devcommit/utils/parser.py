@@ -12,6 +12,7 @@ class CommitFlag(TypedDict):
     files: List[str]
     push: bool
     changelog: bool
+    version: bool
     rawArgv: List[str]
 
 
@@ -58,6 +59,10 @@ def parse_arguments() -> CommitFlag:
         help="Generate changelog file from changes"
     )
     parser.add_argument(
+        "--version", "-v", action="store_true",
+        help="Show version information"
+    )
+    parser.add_argument(
         "rawArgv", nargs="*", help="Additional arguments for git commit"
     )
 
@@ -72,5 +77,6 @@ def parse_arguments() -> CommitFlag:
         files=args.files or [],
         push=args.push,
         changelog=args.changelog,
+        version=args.version,
         rawArgv=args.rawArgv,
     )
