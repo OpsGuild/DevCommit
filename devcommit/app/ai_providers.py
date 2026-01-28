@@ -124,6 +124,8 @@ class OpenAIProvider(AIProvider):
             max_tokens=max_tokens,
             temperature=0.7,
         )
+        if not response or not response.choices:
+            raise ValueError("OpenAI returned empty response (no choices).")
         return response.choices[0].message.content.strip()
 
 
@@ -150,6 +152,8 @@ class GroqProvider(AIProvider):
             max_tokens=max_tokens,
             temperature=0.7,
         )
+        if not response or not response.choices:
+            raise ValueError("Groq returned empty response (no choices).")
         return response.choices[0].message.content.strip()
 
 
@@ -190,7 +194,14 @@ class OpenRouterProvider(AIProvider):
                 "X-Title": "DevCommit",
             },
         )
-        return response.choices[0].message.content.strip()
+        if not response or not response.choices:
+            raise ValueError("OpenRouter returned empty response (no choices).")
+            
+        content = response.choices[0].message.content
+        if not content:
+            return ""
+            
+        return content.strip()
 
 
 class AnthropicProvider(AIProvider):
@@ -284,6 +295,8 @@ class CustomProvider(AIProvider):
             max_tokens=max_tokens,
             temperature=0.7,
         )
+        if not response or not response.choices:
+            raise ValueError("Custom API returned empty response (no choices).")
         return response.choices[0].message.content.strip()
 
 
