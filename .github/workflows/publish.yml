@@ -18,14 +18,51 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install setuptools, wheel, and build tools
-        run: pip install setuptools wheel build
+      - name: Validate tag matches package version
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+          import tomllib
+
+          tag_version = os.environ["GITHUB_REF_NAME"].removeprefix("v")
+
+          with open("pyproject.toml", "rb") as f:
+              pyproject = tomllib.load(f)
+
+          project_version = pyproject["project"]["version"]
+          poetry_version = pyproject["tool"]["poetry"]["version"]
+
+          errors = []
+          if project_version != tag_version:
+              errors.append(
+                  f"Tag version {tag_version} does not match project.version {project_version}."
+              )
+          if poetry_version != tag_version:
+              errors.append(
+                  f"Tag version {tag_version} does not match tool.poetry.version {poetry_version}."
+              )
+          if project_version != poetry_version:
+              errors.append(
+                  f"project.version {project_version} does not match tool.poetry.version {poetry_version}."
+              )
+
+          if errors:
+              for error in errors:
+                  print(error)
+              sys.exit(1)
+
+          print(f"Publishing version {tag_version}")
+          PY
+
+      - name: Install build and publishing tools
+        run: pip install build twine
 
       - name: Build package
         run: python -m build
 
-      - name: Install Twine
-        run: pip install twine
+      - name: Check distributions
+        run: twine check dist/*
 
       - name: Publish to PyPI
         run: |
