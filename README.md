@@ -445,8 +445,8 @@ devcommit --stageAll --changelog --files src/
 
 - **With `--stageAll`**: Changelog is generated from unstaged changes **before** staging
 - **Without `--stageAll`**: Changelog is generated from the last commit **after** committing
-- Changelogs are saved as markdown files with datetime-based names (e.g., `2026-01-28_00-55-30.md`)
-- Default directory: `changelogs/` (configurable via `CHANGELOG_DIR` in `.dcommit`)
+- Changelogs are saved as markdown files with datetime-based names inside `year/month` folders (e.g., `changelogs/2026/01/2026-01-28_00-55-30.md`)
+- Default base directory: `changelogs/` (configurable via `CHANGELOG_DIR` in `.dcommit`)
 - Uses Keep a Changelog format with AI-generated content
 
 **Example workflow:**
@@ -458,7 +458,7 @@ devcommit --stageAll --changelog --files src/
 # Stage all changes and generate changelog before committing
 devcommit --stageAll --changelog
 
-# The changelog file is created in changelogs/ directory
+# The changelog file is created in changelogs/<year>/<month>/ directory
 # Then changes are staged and committed
 ```
 
