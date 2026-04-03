@@ -8,3 +8,5 @@
 setup.py
 **/.venv
 **venv
+.idea
+*.log

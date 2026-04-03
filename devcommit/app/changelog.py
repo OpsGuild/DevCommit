@@ -5,6 +5,7 @@ import os
 from datetime import datetime
 
 from devcommit.app.ai_providers import get_ai_provider
+from devcommit.utils.git import get_current_branch
 from devcommit.utils.logger import config
 
 
@@ -75,14 +76,18 @@ def save_changelog(content: str, directory: str = None) -> str:
         directory = config("CHANGELOG_DIR", default="changelogs")
 
     now = datetime.now()
+    branch_name = get_current_branch().replace("/", "-")
     year_directory = now.strftime("%Y")
     month_directory = now.strftime("%m")
-    target_directory = os.path.join(directory, year_directory, month_directory)
+    day_directory = now.strftime("%d")
+    target_directory = os.path.join(
+        directory, branch_name, year_directory, month_directory, day_directory
+    )
 
-    # Create the year/month directory structure if it doesn't exist
+    # Create the branch/year/month/day directory structure if it doesn't exist
     os.makedirs(target_directory, exist_ok=True)
 
-    filename = now.strftime("%Y-%m-%d_%H-%M-%S.md")
+    filename = now.strftime("%H-%M-%S.md")
     filepath = os.path.join(target_directory, filename)
 
     with open(filepath, "w", encoding="utf-8") as f:
