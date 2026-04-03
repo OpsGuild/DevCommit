@@ -44,7 +44,7 @@ create-dcommit = "devcommit.create_config:create_dcommit"
 
 [tool.poetry]
 name = "devcommit"
-version = "0.1.5.4"
+version = "0.1.5.5"
 description = "AI-powered git commit message generator"
 authors = ["Hordunlarmy <Hordunlarmy@gmail.com>"]
 
