@@ -77,6 +77,7 @@ A command-line AI tool for autocommits.
    # GEMINI_MODEL / OPENAI_MODEL / GROQ_MODEL / OPENROUTER_MODEL / ANTHROPIC_MODEL / OLLAMA_MODEL / CUSTOM_MODEL
    MODEL_NAME = gemini-2.5-flash
    COMMIT_MODE = auto
+   CHANGELOG_MODE = timestamped
    EOF
    ```
 
@@ -91,6 +92,7 @@ A command-line AI tool for autocommits.
    COMMIT_TYPE = conventional
    MODEL_NAME = gemini-2.0-flash-exp
    COMMIT_MODE = auto
+   CHANGELOG_MODE = timestamped
    EOF
    ```
 
@@ -445,8 +447,11 @@ devcommit --stageAll --changelog --files src/
 
 - **With `--stageAll`**: Changelog is generated from unstaged changes **before** staging
 - **Without `--stageAll`**: Changelog is generated from the last commit **after** committing
-- Changelogs are saved as markdown files inside `branch/year/month/day` folders with time-based names (e.g., `changelogs/staging/2026/01/28/00-55-30.md`)
-- Default base directory: `changelogs/` (configurable via `CHANGELOG_DIR` in `.dcommit`)
+- Storage mode is controlled by `CHANGELOG_MODE`:
+  - `timestamped` (default): new file per run in `changelogs/<branch>/<year>/<month>/<day>/<time>.md`
+  - `branch`: one file per branch, updated in place at `changelogs/<branch>.md`
+- Default base directory is `changelogs/` (configurable via `CHANGELOG_DIR` in `.dcommit`)
+- Empty sections are automatically removed (including empty `## [Unreleased]`)
 - Uses Keep a Changelog format with AI-generated content
 
 **Example workflow:**
@@ -458,7 +463,9 @@ devcommit --stageAll --changelog --files src/
 # Stage all changes and generate changelog before committing
 devcommit --stageAll --changelog
 
-# The changelog file is created in changelogs/<branch>/<year>/<month>/<day>/ directory
+# The changelog file is created based on CHANGELOG_MODE
+# timestamped: changelogs/<branch>/<year>/<month>/<day>/<time>.md
+# branch:      changelogs/<branch>.md
 # Then changes are staged and committed
 ```
 
@@ -654,6 +661,7 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 | `EXCLUDE_FILES` | Files to exclude from diff           | `package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock` | Comma-separated file patterns            |
 | `MAX_TOKENS`    | Maximum tokens for AI response       | `8192`                                                 | Any positive integer                     |
 | `CHANGELOG_DIR` | Directory for changelog files        | `changelogs`                                           | Any directory path                       |
+| `CHANGELOG_MODE` | Changelog file strategy             | `timestamped`                                          | `timestamped`, `branch`                  |
 
 ### Configuration Priority
 

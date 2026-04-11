@@ -85,6 +85,12 @@ EXCLUDE_FILES = *.lock, dist/*, build/*, node_modules/*
 # Directory for changelog files (default: changelogs)
 # Used when --changelog flag is passed
 CHANGELOG_DIR = changelogs
+
+# Changelog storage mode (default: timestamped)
+# Options:
+#   - timestamped: Create a new changelog file per run (existing behavior)
+#   - branch: Keep one changelog file per branch and prepend new entries
+CHANGELOG_MODE = timestamped
     """
     
     if "VIRTUAL_ENV" in os.environ:
