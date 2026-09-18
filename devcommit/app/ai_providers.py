@@ -34,6 +34,19 @@ except ImportError:
 sys.stderr = _stderr
 _devnull.close()
 
+REASONING_EFFORTS = {"auto", "none", "low", "medium", "high", "xhigh", "max"}
+
+
+def normalize_reasoning_effort(value: str) -> str:
+    effort = value.lower()
+    if effort not in REASONING_EFFORTS:
+        raise ValueError("REASONING_EFFORT must be auto, none, low, medium, high, xhigh, or max")
+    return effort
+
+
+def reasoning_extra_body(effort: str) -> dict:
+    return {} if effort == "auto" else {"reasoning_effort": effort}
+
 
 class AIProvider(ABC):
     """Base class for AI providers"""
@@ -106,11 +119,12 @@ class GeminiProvider(AIProvider):
 class OpenAIProvider(AIProvider):
     """OpenAI GPT provider"""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key: str, model: str = "gpt-4o-mini", reasoning_effort: str = "auto"):
         if not openai:
             raise ImportError("openai not installed. Run: pip install openai")
         self.client = openai.OpenAI(api_key=api_key)
         self.model = model
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
 
     def generate_commit_message(
         self, diff: str, prompt: str, max_tokens: int
@@ -123,6 +137,7 @@ class OpenAIProvider(AIProvider):
             ],
             max_tokens=max_tokens,
             temperature=0.7,
+            extra_body=reasoning_extra_body(self.reasoning_effort),
         )
         if not response or not response.choices:
             raise ValueError("OpenAI returned empty response (no choices).")
@@ -132,13 +147,14 @@ class OpenAIProvider(AIProvider):
 class GroqProvider(AIProvider):
     """Groq AI provider (OpenAI-compatible)"""
 
-    def __init__(self, api_key: str, model: str = "llama-3.3-70b-versatile"):
+    def __init__(self, api_key: str, model: str = "llama-3.3-70b-versatile", reasoning_effort: str = "auto"):
         if not openai:
             raise ImportError("openai not installed. Run: pip install openai")
         self.client = openai.OpenAI(
             api_key=api_key, base_url="https://api.groq.com/openai/v1"
         )
         self.model = model
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
 
     def generate_commit_message(
         self, diff: str, prompt: str, max_tokens: int
@@ -151,6 +167,7 @@ class GroqProvider(AIProvider):
             ],
             max_tokens=max_tokens,
             temperature=0.7,
+            extra_body=reasoning_extra_body(self.reasoning_effort),
         )
         if not response or not response.choices:
             raise ValueError("Groq returned empty response (no choices).")
@@ -164,6 +181,7 @@ class OpenRouterProvider(AIProvider):
         self,
         api_key: str,
         model: str = "meta-llama/llama-3.3-70b-instruct:free",
+        reasoning_effort: str = "auto",
     ):
         if not openai:
             raise ImportError("openai not installed. Run: pip install openai")
@@ -176,6 +194,7 @@ class OpenRouterProvider(AIProvider):
             },
         )
         self.model = model
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
 
     def generate_commit_message(
         self, diff: str, prompt: str, max_tokens: int
@@ -188,7 +207,7 @@ class OpenRouterProvider(AIProvider):
             ],
             max_tokens=max_tokens,
             temperature=0.7,
-            extra_body={"transforms": ["middle-out"]},
+            extra_body={"transforms": ["middle-out"], **reasoning_extra_body(self.reasoning_effort)},
             extra_headers={
                 "HTTP-Referer": "https://github.com/hordunlarmy/DevCommit",
                 "X-Title": "DevCommit",
@@ -207,23 +226,30 @@ class OpenRouterProvider(AIProvider):
 class AnthropicProvider(AIProvider):
     """Anthropic Claude provider"""
 
-    def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307"):
+    def __init__(self, api_key: str, model: str = "claude-3-haiku-20240307", reasoning_effort: str = "auto"):
         if not anthropic:
             raise ImportError(
                 "anthropic not installed. Run: pip install anthropic"
             )
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
 
     def generate_commit_message(
         self, diff: str, prompt: str, max_tokens: int
     ) -> str:
-        message = self.client.messages.create(
+        request = dict(
             model=self.model,
             max_tokens=max_tokens,
             system=prompt,
             messages=[{"role": "user", "content": diff}],
         )
+        if self.reasoning_effort == "none":
+            request["thinking"] = {"type": "disabled"}
+        elif self.reasoning_effort != "auto":
+            request["thinking"] = {"type": "adaptive"}
+            request["output_config"] = {"effort": self.reasoning_effort}
+        message = self.client.messages.create(**request)
         return message.content[0].text.strip()
 
 
@@ -231,7 +257,7 @@ class OllamaProvider(AIProvider):
     """Ollama local model provider"""
 
     def __init__(
-        self, base_url: str = "http://localhost:11434", model: str = "llama3"
+        self, base_url: str = "http://localhost:11434", model: str = "llama3", reasoning_effort: str = "auto"
     ):
         if not requests:
             raise ImportError(
@@ -239,6 +265,7 @@ class OllamaProvider(AIProvider):
             )
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
 
     def generate_commit_message(
         self, diff: str, prompt: str, max_tokens: int
@@ -250,6 +277,8 @@ class OllamaProvider(AIProvider):
             "stream": False,
             "options": {"temperature": 0.7, "num_predict": max_tokens},
         }
+        if self.reasoning_effort != "auto":
+            data["think"] = False if self.reasoning_effort == "none" else self.reasoning_effort
 
         response = requests.post(url, json=data, timeout=60)
         response.raise_for_status()
@@ -267,6 +296,7 @@ class CustomProvider(AIProvider):
         api_url: str,
         api_key: Optional[str] = None,
         model: str = "default",
+        reasoning_effort: str = "auto",
     ):
         if not openai:
             raise ImportError("openai not installed. Run: pip install openai")
@@ -282,6 +312,7 @@ class CustomProvider(AIProvider):
             api_key=api_key or "dummy-key", base_url=base_url
         )
         self.model = model
+        self.reasoning_effort = normalize_reasoning_effort(reasoning_effort)
 
     def generate_commit_message(
         self, diff: str, prompt: str, max_tokens: int
@@ -294,6 +325,7 @@ class CustomProvider(AIProvider):
             ],
             max_tokens=max_tokens,
             temperature=0.7,
+            extra_body=reasoning_extra_body(self.reasoning_effort),
         )
         if not response or not response.choices:
             raise ValueError("Custom API returned empty response (no choices).")
@@ -304,6 +336,7 @@ def get_ai_provider(config) -> AIProvider:
     """Factory function to get the appropriate AI provider based on config"""
 
     provider_name = config("AI_PROVIDER", default="gemini").lower()
+    reasoning_effort = config("REASONING_EFFORT", default="auto")
 
     if provider_name == "gemini":
         api_key = config("GEMINI_API_KEY", default=None)
@@ -313,6 +346,8 @@ def get_ai_provider(config) -> AIProvider:
         model = config("GEMINI_MODEL", default=None) or config(
             "MODEL_NAME", default="gemini-2.0-flash-exp"
         )
+        if normalize_reasoning_effort(reasoning_effort) != "auto":
+            raise ValueError("REASONING_EFFORT is unsupported by the legacy Gemini SDK; use auto")
         return GeminiProvider(api_key, model)
 
     elif provider_name == "openai":
@@ -322,7 +357,7 @@ def get_ai_provider(config) -> AIProvider:
         model = config("OPENAI_MODEL", default=None) or config(
             "MODEL_NAME", default="gpt-4o-mini"
         )
-        return OpenAIProvider(api_key, model)
+        return OpenAIProvider(api_key, model, reasoning_effort)
 
     elif provider_name == "groq":
         api_key = config("GROQ_API_KEY", default=None)
@@ -331,7 +366,7 @@ def get_ai_provider(config) -> AIProvider:
         model = config("GROQ_MODEL", default=None) or config(
             "MODEL_NAME", default="llama-3.3-70b-versatile"
         )
-        return GroqProvider(api_key, model)
+        return GroqProvider(api_key, model, reasoning_effort)
 
     elif provider_name == "openrouter":
         api_key = config("OPENROUTER_API_KEY", default=None)
@@ -340,7 +375,7 @@ def get_ai_provider(config) -> AIProvider:
         model = config("OPENROUTER_MODEL", default=None) or config(
             "MODEL_NAME", default="meta-llama/llama-3.3-70b-instruct:free"
         )
-        return OpenRouterProvider(api_key, model)
+        return OpenRouterProvider(api_key, model, reasoning_effort)
 
     elif provider_name == "anthropic":
         api_key = config("ANTHROPIC_API_KEY", default=None)
@@ -349,14 +384,14 @@ def get_ai_provider(config) -> AIProvider:
         model = config("ANTHROPIC_MODEL", default=None) or config(
             "MODEL_NAME", default="claude-3-haiku-20240307"
         )
-        return AnthropicProvider(api_key, model)
+        return AnthropicProvider(api_key, model, reasoning_effort)
 
     elif provider_name == "ollama":
         base_url = config("OLLAMA_BASE_URL", default="http://localhost:11434")
         model = config("OLLAMA_MODEL", default=None) or config(
             "MODEL_NAME", default="llama3"
         )
-        return OllamaProvider(base_url, model)
+        return OllamaProvider(base_url, model, reasoning_effort)
 
     elif provider_name == "custom":
         api_url = config("CUSTOM_API_URL", default=None)
@@ -366,7 +401,7 @@ def get_ai_provider(config) -> AIProvider:
         model = config("CUSTOM_MODEL", default=None) or config(
             "MODEL_NAME", default="default"
         )
-        return CustomProvider(api_url, api_key, model)
+        return CustomProvider(api_url, api_key, model, reasoning_effort)
 
     else:
         raise ValueError(

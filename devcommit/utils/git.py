@@ -35,7 +35,32 @@ def exclude_from_diff(path: str) -> str:
     Prepares a Git exclusion path string for the diff command.
     """
 
-    return f':(exclude){path}'
+    return f':(top,exclude){path}'
+
+
+def normalize_exclude_paths(paths: List[str], repo_root: str) -> List[str]:
+    """Convert absolute exclusions in this repository to root-relative paths."""
+    normalized_paths = []
+    resolved_root = os.path.realpath(repo_root)
+
+    for path in paths:
+        expanded_path = os.path.expanduser(path)
+        if not os.path.isabs(expanded_path):
+            normalized_paths.append(path)
+            continue
+
+        resolved_path = os.path.realpath(expanded_path)
+        try:
+            is_in_repo = os.path.commonpath(
+                [resolved_root, resolved_path]
+            ) == resolved_root
+        except ValueError:
+            is_in_repo = False
+
+        if is_in_repo:
+            normalized_paths.append(os.path.relpath(resolved_path, resolved_root))
+
+    return normalized_paths
 
 
 def get_default_excludes() -> List[str]:
@@ -70,9 +95,12 @@ def get_staged_diff(
     Gets the list of staged files and their diff, excluding specified files.
     """
     exclude_files = exclude_files or []
+    repo_root = assert_git_repo()
     diff_cached = ['git', 'diff', '--cached', '--diff-algorithm=minimal']
-    excluded_from_diff = (
-        [exclude_from_diff(f) for f in files_to_exclude + exclude_files])
+    excludes = normalize_exclude_paths(
+        files_to_exclude + exclude_files, repo_root
+    )
+    excluded_from_diff = [exclude_from_diff(path) for path in excludes]
 
     try:
         # Get the list of staged files excluding specified files
@@ -81,7 +109,8 @@ def get_staged_diff(
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            cwd=repo_root
         )
         files_result = (
             files.stdout.strip().split('\n') if files.stdout.strip() else []
@@ -95,7 +124,8 @@ def get_staged_diff(
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            cwd=repo_root
         )
         diff_result = diff.stdout.strip()
 
@@ -140,25 +170,21 @@ def get_diff_for_files(files: List[str], exclude_files: Optional[List[str]] = No
     Gets the diff for specific files.
     """
     exclude_files = exclude_files or []
-    
-    # Filter out excluded files from the list
-    all_excluded = files_to_exclude + exclude_files
-    filtered_files = [
-        f for f in files 
-        if not any(f.endswith(excl.replace('*', '')) or excl.replace(':(exclude)', '') in f 
-                   for excl in all_excluded)
-    ]
-    
-    if not filtered_files:
-        return ""
+    repo_root = assert_git_repo()
+    excludes = normalize_exclude_paths(
+        files_to_exclude + exclude_files, repo_root
+    )
+    excluded_from_diff = [exclude_from_diff(path) for path in excludes]
     
     try:
         diff = subprocess.run(
-            ['git', 'diff', '--cached', '--diff-algorithm=minimal', '--'] + filtered_files,
+            ['git', 'diff', '--cached', '--diff-algorithm=minimal', '--']
+            + files + excluded_from_diff,
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            cwd=repo_root
         )
         return diff.stdout.strip()
     except subprocess.CalledProcessError:

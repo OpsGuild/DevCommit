@@ -479,6 +479,8 @@ devcommit --stageAll --changelog
 - `--files` or `-f`: Stage and commit specific files or folders (can specify multiple)
 - `--push` or `-p`: Push commits to remote after committing
 - `--changelog` or `-c`: Generate changelog file from changes
+- `--models`: Fetch and list models from the configured `AI_PROVIDER`
+- `--free` / `--paid`: With `--models`, limit OpenRouter results to free or paid models
 
 ### Examples
 
@@ -556,6 +558,19 @@ export OPENROUTER_API_KEY='your-openrouter-api-key'
 export OPENROUTER_MODEL='meta-llama/llama-3.3-70b-instruct:free'
 devcommit
 ```
+
+To fetch the live model catalogue for your configured provider without opening a browser:
+
+```bash
+AI_PROVIDER=openrouter devcommit --models
+
+# Only free OpenRouter models
+AI_PROVIDER=openrouter devcommit --models --free
+```
+
+For OpenRouter, the table identifies free and paid models and shows their live token prices. For other providers, it lists the models accessible with that provider's configured API key; Ollama lists models installed locally. Copy an ID into the matching provider model setting, such as `OPENROUTER_MODEL`.
+
+Set `REASONING_EFFORT=none` to disable reasoning where the selected model supports it and favor faster commit messages. The default is `auto`; `low`, `medium`, `high`, `xhigh`, and `max` are also accepted where supported.
 
 **Popular free models on OpenRouter (add `:free` suffix):**
 
@@ -658,7 +673,8 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 | `MAX_NO`        | Number of commit message suggestions | `1`                                                    | Any positive integer                     |
 | `COMMIT_TYPE`   | Style of commit messages             | `general`                                              | `general`, `conventional`, etc.          |
 | `COMMIT_MODE`   | Default commit strategy              | `auto`                                                 | `auto`, `directory`, `global`, `related` |
-| `EXCLUDE_FILES` | Files to exclude from diff           | `package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock` | Comma-separated file patterns            |
+| `REASONING_EFFORT` | Reasoning effort for supported models | `auto`                                              | `auto`, `none`, `low`, `medium`, `high`, `xhigh`, `max` |
+| `EXCLUDE_FILES` | Files to exclude from diff           | `package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock` | Comma-separated patterns or absolute paths within one repo |
 | `MAX_TOKENS`    | Maximum tokens for AI response       | `8192`                                                 | Any positive integer                     |
 | `CHANGELOG_DIR` | Directory for changelog files        | `changelogs`                                           | Any directory path                       |
 | `CHANGELOG_MODE` | Changelog file strategy             | `timestamped`                                          | `timestamped`, `branch`                  |

@@ -9,10 +9,12 @@ os.environ["GRPC_ENABLE_FORK_SUPPORT"] = "1"
 
 from InquirerPy import get_style, inquirer
 from rich.console import Console
+from rich.table import Table
 
 from devcommit.__version__ import __version__
 from devcommit.app.changelog import generate_changelog, save_changelog
 from devcommit.app.gemini_ai import generateCommitMessage
+from devcommit.app.model_catalog import ModelCatalogError, fetch_models
 from devcommit.utils.git import (KnownError, assert_git_repo,
                                  generate_relation_grouping_prompt,
                                  get_detected_message, get_diff_for_files,
@@ -75,6 +77,49 @@ def main(flags: CommitFlag = None):
     # Show version and exit if --version is enabled
     if flags.get("version", False):
         Console().print(f"devcommit version {__version__}")
+        return
+
+    if flags.get("models", False):
+        console = Console()
+        provider = config("AI_PROVIDER", default="gemini").lower()
+        try:
+            models = fetch_models(provider, config)
+        except ModelCatalogError as error:
+            console.print(f"[bold red]Error:[/bold red] {error}")
+            return
+
+        if flags.get("freeModels", False):
+            models = [model for model in models if model["availability"] == "Free"]
+        elif flags.get("paidModels", False):
+            models = [model for model in models if model["availability"] == "Paid"]
+
+        if not models:
+            console.print(f"No matching models are available from {provider}.")
+            return
+
+        table = Table(title=f"Available {provider.title()} Models")
+        table.add_column("Model", style="bold cyan")
+        table.add_column("ID", style="green")
+        table.add_column("Context", justify="right")
+        table.add_column("Access")
+        table.add_column("Price")
+        for model in models:
+            context_length = model["context_length"]
+            context = (
+                f"{context_length:,}"
+                if isinstance(context_length, int)
+                else str(context_length or "-")
+            )
+            table.add_row(
+                str(model["name"]),
+                str(model["id"]),
+                context,
+                str(model["availability"]),
+                str(model["price"]),
+            )
+
+        console.print(table)
+        console.print(f"\nSet one with: {provider.upper()}_MODEL='<model-id>'")
         return
 
     try:

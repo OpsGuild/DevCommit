@@ -68,6 +68,9 @@ MAX_NO = 1
 # Options: general, conventional, etc.
 COMMIT_TYPE = conventional
 
+# Reasoning: auto, none, low, medium, high, xhigh, max. Use none for faster commits.
+REASONING_EFFORT = auto
+
 # Gemini model to use (default: gemini-1.5-flash)
 MODEL_NAME = gemini-1.5-flash
 
@@ -79,7 +82,7 @@ MODEL_NAME = gemini-1.5-flash
 COMMIT_MODE = auto
 
 # Files to exclude from diff (default: package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock)
-# Comma-separated list of file patterns
+# Comma-separated patterns or absolute paths within one repository
 EXCLUDE_FILES = *.lock, dist/*, build/*, node_modules/*
 
 # Directory for changelog files (default: changelogs)

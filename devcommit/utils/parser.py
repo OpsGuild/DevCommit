@@ -12,6 +12,9 @@ class CommitFlag(TypedDict):
     files: List[str]
     push: bool
     changelog: bool
+    models: bool
+    freeModels: bool
+    paidModels: bool
     version: bool
     rawArgv: List[str]
 
@@ -59,6 +62,24 @@ def parse_arguments() -> CommitFlag:
         help="Generate changelog file from changes"
     )
     parser.add_argument(
+        "--models",
+        action="store_true",
+        help="List models from the configured AI provider and exit",
+    )
+    model_filter = parser.add_mutually_exclusive_group()
+    model_filter.add_argument(
+        "--free",
+        dest="free_models",
+        action="store_true",
+        help="Only show free models with --models",
+    )
+    model_filter.add_argument(
+        "--paid",
+        dest="paid_models",
+        action="store_true",
+        help="Only show paid models with --models",
+    )
+    parser.add_argument(
         "--version", "-v", action="store_true",
         help="Show version information"
     )
@@ -77,6 +98,9 @@ def parse_arguments() -> CommitFlag:
         files=args.files or [],
         push=args.push,
         changelog=args.changelog,
+        models=args.models,
+        freeModels=args.free_models,
+        paidModels=args.paid_models,
         version=args.version,
         rawArgv=args.rawArgv,
     )
