@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-10-23 05:57:55]
+
+### Changed
+- Bumped project version from 0.1.5.7 to 0.1.5.8 in `pyproject.toml` configuration files.
+
 ## [2026-10-23 05:56:44]
 
 ### Added
