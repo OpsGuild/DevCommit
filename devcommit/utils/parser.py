@@ -15,6 +15,7 @@ class CommitFlag(TypedDict):
     models: bool
     freeModels: bool
     paidModels: bool
+    commitAlias: Optional[str]
     version: bool
     rawArgv: List[str]
 
@@ -84,6 +85,12 @@ def parse_arguments() -> CommitFlag:
         help="Show version information"
     )
     parser.add_argument(
+        "--commit-alias",
+        type=str,
+        default=None,
+        help="Git alias to use instead of git commit",
+    )
+    parser.add_argument(
         "rawArgv", nargs="*", help="Additional arguments for git commit"
     )
 
@@ -101,6 +108,7 @@ def parse_arguments() -> CommitFlag:
         models=args.models,
         freeModels=args.free_models,
         paidModels=args.paid_models,
+        commitAlias=args.commit_alias,
         version=args.version,
         rawArgv=args.rawArgv,
     )

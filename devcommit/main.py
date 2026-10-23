@@ -20,7 +20,7 @@ from devcommit.utils.git import (KnownError, assert_git_repo,
                                  get_detected_message, get_diff_for_files,
                                  get_files_from_paths, get_staged_diff,
                                  group_files_by_directory, has_commits_to_push,
-                                 parse_relation_groups, push_to_remote,
+                                 parse_relation_groups, push_to_remote, commit_changes as run_commit,
                                  stage_files)
 from devcommit.utils.logger import Logger, config
 from devcommit.utils.parser import CommitFlag, parse_arguments
@@ -73,6 +73,7 @@ def sanitize_commit_messages(messages):
 def main(flags: CommitFlag = None):
     if flags is None:
         flags = parse_arguments()
+    flags["commitAlias"] = flags.get("commitAlias") or config("GIT_COMMIT_ALIAS", default=None)
 
     # Show version and exit if --version is enabled
     if flags.get("version", False):
@@ -813,7 +814,7 @@ def prompt_custom_message(console):
     return custom_message
 
 
-def commit_changes(console, commit, raw_argv, files=None):
+def commit_changes(console, commit, raw_argv, files=None, commit_alias=None):
     """Commit changes.
 
     Args:
@@ -822,14 +823,7 @@ def commit_changes(console, commit, raw_argv, files=None):
         raw_argv: Additional git commit arguments
         files: Optional list of specific files to commit. If None, commits all staged files.
     """
-    if files:
-        # Commit only specific files
-        subprocess.run(
-            ["git", "commit", "-m", commit, *raw_argv, "--"] + files
-        )
-    else:
-        # Commit all staged files
-        subprocess.run(["git", "commit", "-m", commit, *raw_argv])
+    run_commit(commit, raw_argv, files=files, commit_alias=commit_alias)
     console.print("\n[bold green]✅ Committed successfully![/bold green]")
 
 
@@ -995,6 +989,7 @@ def process_global_commit(console, flags, staged=None):
                 selected_commit,
                 flags["rawArgv"],
                 files=files_to_commit,
+                commit_alias=flags["commitAlias"],
             )
             return True
         else:
@@ -1173,17 +1168,7 @@ def process_per_directory_commits(console, staged, flags):
                 continue
             elif selected_commit:
                 # Commit only the files in this directory
-                subprocess.run(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        selected_commit,
-                        *flags["rawArgv"],
-                        "--",
-                    ]
-                    + files
-                )
+                run_commit(selected_commit, flags["rawArgv"], files=files, commit_alias=flags["commitAlias"])
                 console.print(
                     f"\n[bold green]✅ Committed {directory}[/bold green]"
                 )
@@ -1380,17 +1365,7 @@ def process_per_file_commits(console, staged, flags):
                 continue
             elif selected_commit:
                 # Commit only this file
-                subprocess.run(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        selected_commit,
-                        *flags["rawArgv"],
-                        "--",
-                        file,
-                    ]
-                )
+                run_commit(selected_commit, flags["rawArgv"], files=[file], commit_alias=flags["commitAlias"])
                 console.print(
                     f"\n[bold green]✅ Committed {file}[/bold green]"
                 )
@@ -1561,17 +1536,7 @@ def process_per_directory_commits_from_paths(
                 continue
             elif selected_commit:
                 # Commit only the files for this path
-                subprocess.run(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        selected_commit,
-                        *flags["rawArgv"],
-                        "--",
-                    ]
-                    + files
-                )
+                run_commit(selected_commit, flags["rawArgv"], files=files, commit_alias=flags["commitAlias"])
                 console.print(
                     f"\n[bold green]✅ Committed {path}[/bold green]"
                 )
@@ -2012,17 +1977,7 @@ def process_per_related_commits(console, staged, flags):
                 continue
             elif selected_commit:
                 # Commit only the files in this group
-                subprocess.run(
-                    [
-                        "git",
-                        "commit",
-                        "-m",
-                        selected_commit,
-                        *flags["rawArgv"],
-                        "--",
-                    ]
-                    + group_files
-                )
+                run_commit(selected_commit, flags["rawArgv"], files=group_files, commit_alias=flags["commitAlias"])
                 console.print(
                     f"\n[bold green]✅ Committed {group_name}[/bold green]"
                 )

@@ -129,6 +129,22 @@ devcommit
   devcommit
   ```
 
+### Commit identities and Git aliases
+
+DevCommit uses `git commit` by default. To use any configured Git commit alias instead, pass its alias name:
+
+```bash
+devcommit --commit-alias dev-commit
+```
+
+To use one identity by default, add this to `~/.dcommit`:
+
+```ini
+GIT_COMMIT_ALIAS = dev-commit
+```
+
+DevCommit verifies the alias exists before committing and applies it in global, directory, file, path, and related-group modes. This works with aliases that set `user.name`, `user.email`, signing, hooks, or other Git commit options.
+
 ### Directory-Based Commits
 
 DevCommit supports generating separate commits per root directory, which is useful when you have changes across multiple directories.
@@ -213,11 +229,13 @@ The AI analyzes your changes using these priorities:
 - Larger changesets (many files or large diffs) will use proportionally more tokens
 
 **When to Use:**
+
 - ✅ Best for: Medium-sized changesets (5-50 files) where logical grouping matters
 - ✅ Ideal when: You want semantically coherent commits regardless of directory structure
 - ⚠️ Consider alternatives for: Very large changesets (100+ files) or when token costs are a concern
 
 For large changesets, you might prefer:
+
 - **Directory-based commits** (`COMMIT_MODE=directory`) - processes each directory separately
 - **Global commit** (`COMMIT_MODE=global`) - one commit for everything
 
@@ -246,9 +264,10 @@ Or select it interactively when prompted (with `COMMIT_MODE = auto`):
 You're working on multiple things and have changes across many files and directories:
 
 **Staged files:**
+
 ```
 schema/appointment.py          # New appointment model
-src/api/appointments.py        # Appointment endpoints  
+src/api/appointments.py        # Appointment endpoints
 src/services/booking_service.py # Booking logic
 migrations/003_appointments.sql # Database migration
 tests/test_appointments.py     # Feature tests
@@ -285,6 +304,7 @@ config/redis.py                # Updated cache settings (unrelated)
 **Result:** 3 focused, logical commits instead of 8 directory-based commits!
 
 The AI identifies relationships by analyzing:
+
 - Shared class/function names in the diffs
 - Import statements connecting files
 - Database table names
@@ -298,11 +318,12 @@ After DevCommit analyzes and groups your changes, you'll see three options:
 1. **✅ Commit all groups** - Automatically processes all groups sequentially (no prompts between groups)
 2. **📋 Select specific groups** - Choose which groups to commit:
    - No groups are pre-selected (you must explicitly select with Space)
-   - If you press Enter without selecting any, you'll be re-prompted with: "⚠️  You need to select at least one group to continue"
+   - If you press Enter without selecting any, you'll be re-prompted with: "⚠️ You need to select at least one group to continue"
    - After committing each selected group, you'll be asked if you want to continue to the next
 3. **🔄 Regenerate grouping** - Re-runs the AI analysis to create new groups (useful if the initial grouping isn't ideal)
 
 **Example workflow:**
+
 ```
 ✅ Found 5 logical group(s)
 
@@ -315,7 +336,7 @@ After DevCommit analyzes and groups your changes, you'll see three options:
 
 ? Select groups to commit
   (none selected - use Space to toggle)
-  
+
 [User presses Enter without selecting]
 ⚠️  You need to select at least one group to continue
 Use Space to select groups, then press Enter
@@ -324,7 +345,7 @@ Use Space to select groups, then press Enter
   [✓] ✨ add-user-feature [feature] (4 files)
   [ ] 🐛 fix-bug [bugfix] (2 files)
   [✓] 📝 update-docs [docs] (3 files)
-  
+
 ✓ Selected 2 group(s) to commit
 
 [After committing first group]
@@ -411,12 +432,14 @@ devcommit -f file1.py -p
 Don't like the AI-generated commit messages? You can regenerate them on the fly!
 
 When viewing commit message options, you'll see:
+
 - Numbered commit message suggestions
 - ✏️ Enter custom message
 - 🔄 **Regenerate commit messages** (new!)
 - ❌ Cancel
 
 Selecting "Regenerate commit messages" will:
+
 - Call the AI again to generate new suggestions
 - Show the new messages in the same prompt
 - Allow you to regenerate again or select a message
@@ -529,15 +552,15 @@ devcommit -s -c -f src/
 
 DevCommit now supports **multiple AI providers**! Choose from:
 
-| Provider         | Free Tier          | Speed       | Quality   | Get API Key                                       |
-| ---------------- | ------------------ | ----------- | --------- | ------------------------------------------------- |
-| 🆓 **Gemini**    | 15 req/min, 1M/day | Fast        | Good      | [Get Key](https://aistudio.google.com/app/apikey) |
-| ⚡ **Groq**      | Very generous      | **Fastest** | Good      | [Get Key](https://console.groq.com/keys)          |
-| 🌐 **OpenRouter**| Free models available | Fast      | Good      | [Get Key](https://openrouter.ai/keys)            |
-| 🤖 **OpenAI**    | $5 trial           | Medium      | **Best**  | [Get Key](https://platform.openai.com/api-keys)   |
-| 🧠 **Anthropic** | Limited trial      | Medium      | Excellent | [Get Key](https://console.anthropic.com/)         |
-| 🏠 **Ollama**    | **Unlimited**      | Medium      | Good      | [Install](https://ollama.ai/)                     |
-| 🔧 **Custom**    | Varies             | Varies      | Varies    | Your server                                       |
+| Provider          | Free Tier             | Speed       | Quality   | Get API Key                                       |
+| ----------------- | --------------------- | ----------- | --------- | ------------------------------------------------- |
+| 🆓 **Gemini**     | 15 req/min, 1M/day    | Fast        | Good      | [Get Key](https://aistudio.google.com/app/apikey) |
+| ⚡ **Groq**       | Very generous         | **Fastest** | Good      | [Get Key](https://console.groq.com/keys)          |
+| 🌐 **OpenRouter** | Free models available | Fast        | Good      | [Get Key](https://openrouter.ai/keys)             |
+| 🤖 **OpenAI**     | $5 trial              | Medium      | **Best**  | [Get Key](https://platform.openai.com/api-keys)   |
+| 🧠 **Anthropic**  | Limited trial         | Medium      | Excellent | [Get Key](https://console.anthropic.com/)         |
+| 🏠 **Ollama**     | **Unlimited**         | Medium      | Good      | [Install](https://ollama.ai/)                     |
+| 🔧 **Custom**     | Varies                | Varies      | Varies    | Your server                                       |
 
 ### Quick Setup Examples
 
@@ -575,6 +598,7 @@ Set `REASONING_EFFORT=none` to disable reasoning where the selected model suppor
 **Popular free models on OpenRouter (add `:free` suffix):**
 
 **Recommended Models:**
+
 - `meta-llama/llama-3.3-70b-instruct:free` - Llama 3.3 70B Instruct (Powerful & General Purpose)
 - `google/gemma-3-27b-it:free` - Google Gemma 3 27B Instruct (Efficient & Capable)
 - `openai/gpt-oss-120b:free` - OpenAI GPT-OSS 120B (Large & Experimental)
@@ -582,6 +606,7 @@ Set `REASONING_EFFORT=none` to disable reasoning where the selected model suppor
 - `qwen/qwen3-next-80b-a3b-instruct:free` - Qwen3 Next 80B (Advanced Instruction Following)
 
 **Important Notes:**
+
 - **Logging Requirements:** Some free models may log your prompts and responses for model improvement purposes. This means:
   - Your code diffs and commit messages may be stored by the provider
   - **Do NOT use free models with logging for sensitive/confidential code**
@@ -616,68 +641,76 @@ All configuration can be set via **environment variables** or **`.dcommit` file*
 
 ### AI Provider Settings
 
-| Variable      | Description             | Default  | Options                                                     |
-| ------------- | ----------------------- | -------- | ----------------------------------------------------------- |
+| Variable      | Description             | Default  | Options                                                                   |
+| ------------- | ----------------------- | -------- | ------------------------------------------------------------------------- |
 | `AI_PROVIDER` | Which AI service to use | `gemini` | `gemini`, `openai`, `groq`, `openrouter`, `anthropic`, `ollama`, `custom` |
 
 ### Provider-Specific Settings
 
 **Gemini:**
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GEMINI_API_KEY` | Google Gemini API key | - |
-| `GEMINI_MODEL` | Model name | `gemini-2.0-flash-exp` |
+
+| Variable         | Description           | Default                |
+| ---------------- | --------------------- | ---------------------- |
+| `GEMINI_API_KEY` | Google Gemini API key | -                      |
+| `GEMINI_MODEL`   | Model name            | `gemini-2.0-flash-exp` |
 
 **OpenAI:**
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | OpenAI API key | - |
-| `OPENAI_MODEL` | Model name | `gpt-4o-mini` |
+
+| Variable         | Description    | Default       |
+| ---------------- | -------------- | ------------- |
+| `OPENAI_API_KEY` | OpenAI API key | -             |
+| `OPENAI_MODEL`   | Model name     | `gpt-4o-mini` |
 
 **Groq:**
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `GROQ_API_KEY` | Groq API key ([Get it here](https://console.groq.com/)) | - |
-| `GROQ_MODEL` | Model name | `llama-3.3-70b-versatile` |
+
+| Variable       | Description                                             | Default                   |
+| -------------- | ------------------------------------------------------- | ------------------------- |
+| `GROQ_API_KEY` | Groq API key ([Get it here](https://console.groq.com/)) | -                         |
+| `GROQ_MODEL`   | Model name                                              | `llama-3.3-70b-versatile` |
 
 **OpenRouter:**
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENROUTER_API_KEY` | OpenRouter API key ([Get it here](https://openrouter.ai/keys)) | - |
-| `OPENROUTER_MODEL` | Model name (add `:free` suffix for free models) | `meta-llama/llama-3.3-70b-instruct:free` |
+
+| Variable             | Description                                                    | Default                                  |
+| -------------------- | -------------------------------------------------------------- | ---------------------------------------- |
+| `OPENROUTER_API_KEY` | OpenRouter API key ([Get it here](https://openrouter.ai/keys)) | -                                        |
+| `OPENROUTER_MODEL`   | Model name (add `:free` suffix for free models)                | `meta-llama/llama-3.3-70b-instruct:free` |
 
 **Anthropic:**
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `ANTHROPIC_API_KEY` | Anthropic API key | - |
-| `ANTHROPIC_MODEL` | Model name | `claude-3-haiku-20240307` |
+
+| Variable            | Description       | Default                   |
+| ------------------- | ----------------- | ------------------------- |
+| `ANTHROPIC_API_KEY` | Anthropic API key | -                         |
+| `ANTHROPIC_MODEL`   | Model name        | `claude-3-haiku-20240307` |
 
 **Ollama (Local):**
-| Variable | Description | Default |
-|----------|-------------|---------|
+
+| Variable          | Description       | Default                  |
+| ----------------- | ----------------- | ------------------------ |
 | `OLLAMA_BASE_URL` | Ollama server URL | `http://localhost:11434` |
-| `OLLAMA_MODEL` | Model name | `llama3` |
+| `OLLAMA_MODEL`    | Model name        | `llama3`                 |
 
 **Custom (OpenAI-compatible):**
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `CUSTOM_API_URL` | API endpoint URL | - |
-| `CUSTOM_API_KEY` | API key (optional) | - |
-| `CUSTOM_MODEL` | Model name | `default` |
+
+| Variable         | Description        | Default   |
+| ---------------- | ------------------ | --------- |
+| `CUSTOM_API_URL` | API endpoint URL   | -         |
+| `CUSTOM_API_KEY` | API key (optional) | -         |
+| `CUSTOM_MODEL`   | Model name         | `default` |
 
 ### General Settings
 
-| Variable        | Description                          | Default                                                | Options                                  |
-| --------------- | ------------------------------------ | ------------------------------------------------------ | ---------------------------------------- |
-| `LOCALE`        | Language for commit messages         | `en-US`                                                | Any locale code (e.g., `en`, `es`, `fr`) |
-| `MAX_NO`        | Number of commit message suggestions | `1`                                                    | Any positive integer                     |
-| `COMMIT_TYPE`   | Style of commit messages             | `general`                                              | `general`, `conventional`, etc.          |
-| `COMMIT_MODE`   | Default commit strategy              | `auto`                                                 | `auto`, `directory`, `global`, `related` |
-| `REASONING_EFFORT` | Reasoning effort for supported models | `auto`                                              | `auto`, `none`, `low`, `medium`, `high`, `xhigh`, `max` |
-| `EXCLUDE_FILES` | Files to exclude from diff           | `package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock` | Comma-separated patterns or absolute paths within one repo |
-| `MAX_TOKENS`    | Maximum tokens for AI response       | `8192`                                                 | Any positive integer                     |
-| `CHANGELOG_DIR` | Directory for changelog files        | `changelogs`                                           | Any directory path                       |
-| `CHANGELOG_MODE` | Changelog file strategy             | `timestamped`                                          | `timestamped`, `branch`                  |
+| Variable           | Description                            | Default                                                | Options                                                    |
+| ------------------ | -------------------------------------- | ------------------------------------------------------ | ---------------------------------------------------------- |
+| `LOCALE`           | Language for commit messages           | `en-US`                                                | Any locale code (e.g., `en`, `es`, `fr`)                   |
+| `MAX_NO`           | Number of commit message suggestions   | `1`                                                    | Any positive integer                                       |
+| `COMMIT_TYPE`      | Style of commit messages               | `general`                                              | `general`, `conventional`, etc.                            |
+| `COMMIT_MODE`      | Default commit strategy                | `auto`                                                 | `auto`, `directory`, `global`, `related`                   |
+| `GIT_COMMIT_ALIAS` | Git alias used instead of `git commit` | -                                                      | Configured Git alias name                                  |
+| `REASONING_EFFORT` | Reasoning effort for supported models  | `auto`                                                 | `auto`, `none`, `low`, `medium`, `high`, `xhigh`, `max`    |
+| `EXCLUDE_FILES`    | Files to exclude from diff             | `package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock` | Comma-separated patterns or absolute paths within one repo |
+| `MAX_TOKENS`       | Maximum tokens for AI response         | `8192`                                                 | Any positive integer                                       |
+| `CHANGELOG_DIR`    | Directory for changelog files          | `changelogs`                                           | Any directory path                                         |
+| `CHANGELOG_MODE`   | Changelog file strategy                | `timestamped`                                          | `timestamped`, `branch`                                    |
 
 ### Configuration Priority
 

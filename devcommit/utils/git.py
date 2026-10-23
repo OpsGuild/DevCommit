@@ -2,6 +2,7 @@
 """Git utilities"""
 
 import os
+import re
 import subprocess
 from collections import defaultdict
 from typing import Dict, List, Optional
@@ -9,6 +10,26 @@ from typing import Dict, List, Optional
 
 class KnownError(Exception):
     pass
+
+
+def commit_changes(message: str, raw_argv: List[str], files: Optional[List[str]] = None, commit_alias: Optional[str] = None) -> None:
+    command = ["git", "commit"]
+    if commit_alias:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", commit_alias):
+            raise KnownError("Commit alias may contain only letters, numbers, dots, underscores, and hyphens")
+        configured = subprocess.run(
+            ["git", "config", "--get", f"alias.{commit_alias}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if configured.returncode != 0 or not configured.stdout.strip():
+            raise KnownError(f'Git alias "{commit_alias}" is not configured')
+        command = ["git", commit_alias]
+    command.extend(["-m", message, *raw_argv])
+    if files:
+        command.extend(["--", *files])
+    subprocess.run(command, check=True)
 
 
 def assert_git_repo() -> str:

@@ -81,6 +81,9 @@ MODEL_NAME = gemini-1.5-flash
 #   - global: Always create one commit for all changes
 COMMIT_MODE = auto
 
+# Optional Git alias to use for commits, for example: adeola-commit
+GIT_COMMIT_ALIAS =
+
 # Files to exclude from diff (default: package-lock.json, pnpm-lock.yaml, yarn.lock, *.lock)
 # Comma-separated patterns or absolute paths within one repository
 EXCLUDE_FILES = *.lock, dist/*, build/*, node_modules/*
